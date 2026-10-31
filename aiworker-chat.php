@@ -738,7 +738,9 @@ function aiworker_chat_preview(array $o, array $persona, bool $voiceAllowed): vo
     $lang = aiworker_chat_preview_lang($o);
     $chatScheme = (string) ($persona['scheme'] ?? 'light');
     $attrs = [
-        'src' => aiworker_chat_base().'/widget.js?v='.floor(time() / 86400), 'data-demo' => '1', 'data-base' => aiworker_chat_base(), 'data-greet' => '1',
+        // the preview always takes the current widget: kra.name serves it as immutable, so a daily version kept a widget
+        // loaded before an update of the preview until the next day
+        'src' => aiworker_chat_base().'/widget.js?v='.time(), 'data-demo' => '1', 'data-base' => aiworker_chat_base(), 'data-greet' => '1',
         'data-name' => (string) ($persona['name'] ?? '') ?: __('Anna', 'aiworker-chat'), 'data-title' => (string) ($persona['title'] ?? '') ?: __('Consultant', 'aiworker-chat'), 'data-avatar' => (string) ($persona['avatar'] ?? ''),
         'data-tab-label' => (string) ($persona['tab_label'] ?? ''), 'data-lang' => $lang ?: 'en',
         'data-demo-note' => __('This is a preview in the WordPress settings: AI answers, voice and files work in the real chat on the site.', 'aiworker-chat'),
