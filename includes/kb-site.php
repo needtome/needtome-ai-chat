@@ -69,7 +69,7 @@ function aiworker_chat_kb_site_docs(?array $kb = null): array {
     if (! empty($kb['widgets'])) {
         foreach (aiworker_chat_kb_widget_areas($kb) as $sidebar => $area) {
             /* translators: %s: name of the widget area, e.g. «Footer» */
-            $d = $doc('widgets:'.$sidebar, sprintf(__('Site widgets: %s', 'aiworker-chat'), $area['name']), $area['text']);
+            $d = $doc('widgets:'.$sidebar, sprintf(__('Site widgets: %s', 'needtome-ai-chat'), $area['name']), $area['text']);
             if ($d) $docs[] = $d;
         }
     }

@@ -20,11 +20,11 @@ if (! class_exists('Aiworker_Chat_Profile')) {
          */
         private static function plugins(): array {
             return [
-                'nohackme-defender' => ['name' => 'NoHackMe Defender', 'text' => __('Protects WordPress from suspicious requests, brute-force logins, scraping and request floods.', 'aiworker-chat'),
+                'nohackme-defender' => ['name' => 'NoHackMe Defender', 'text' => __('Protects WordPress from suspicious requests, brute-force logins, scraping and request floods.', 'needtome-ai-chat'),
                     'demo' => 'https://needtome.com/nohackme/', 'wporg' => 'https://wordpress.org/plugins/nohackme-defender/', 'zip' => '', 'page' => 'nohackme_defender_parent'],
-                'needtome-phone-number-switcher' => ['name' => 'NeedToMe Phone Number Switcher', 'text' => __('Shows a separate phone number for each advertising campaign and updates click-to-call links.', 'aiworker-chat'),
+                'needtome-phone-number-switcher' => ['name' => 'NeedToMe Phone Number Switcher', 'text' => __('Shows a separate phone number for each advertising campaign and updates click-to-call links.', 'needtome-ai-chat'),
                     'demo' => 'https://needtome.com/needtome-phone-number-switcher/', 'wporg' => 'https://wordpress.org/plugins/needtome-phone-number-switcher/', 'zip' => '', 'page' => 'needtome-phone-number-switcher'],
-                'aiworker-chat' => ['name' => 'NeedToMe AI Chat', 'text' => __('AI chat for your website, connected to AI Worker (kra.name).', 'aiworker-chat'),
+                'needtome-ai-chat' => ['name' => 'NeedToMe AI Chat', 'text' => __('AI chat for your website, connected to AI Worker (kra.name).', 'needtome-ai-chat'),
                     'demo' => 'https://needtome.com/needtome-ai-chat/', 'wporg' => '', 'zip' => 'https://kra.name/app/aiworker-chat.zip', 'page' => 'aiworker-chat'],
             ];
         }
@@ -32,12 +32,12 @@ if (! class_exists('Aiworker_Chat_Profile')) {
         /** Selected projects: name, site, address and the sentence about it. */
         private static function projects(): array {
             return [
-                ['Gloap', 'gloap.net', 'https://gloap.net/en/', __('A crewing platform with 200,000+ resumes, vacancies, response tools, instant messaging, bulk mailings, Telegram bots, Asterisk calling, and PDF/Word document generation. PageSpeed Mobile reached 100.', 'aiworker-chat')],
-                ['AI Worker', 'kra.name', 'https://kra.name/', __('AI employees for business: website chats, customer messaging and automation.', 'aiworker-chat')],
-                ['Obuvnov', 'obuvnov.ru', 'https://obuvnov.ru/', __('A product catalog that processes more than 50 million products from supplier feeds, with city-specific pages and PageSpeed Mobile 100.', 'aiworker-chat')],
-                ['O-Keto', 'o-keto.com', 'https://o-keto.com/en/', __('A WordPress and WooCommerce platform for recipes, products, nutrients, quizzes, digital books, multilingual publishing, and ecommerce.', 'aiworker-chat')],
-                ['ProTradeJournal', 'protradejournal.net', 'https://protradejournal.net/', __('Browser and desktop trading tools with real-time charts, demo trading, portfolio tracking, and a historical-data testing platform.', 'aiworker-chat')],
-                ['TenderClip', 'tenderclip.com', 'https://tenderclip.com/', __('A multilingual WordPress media platform for animated cards and short videos, with subscriptions, a browser editor, and automated publishing. PageSpeed reached 100 on mobile and desktop.', 'aiworker-chat')],
+                ['Gloap', 'gloap.net', 'https://gloap.net/en/', __('A crewing platform with 200,000+ resumes, vacancies, response tools, instant messaging, bulk mailings, Telegram bots, Asterisk calling, and PDF/Word document generation. PageSpeed Mobile reached 100.', 'needtome-ai-chat')],
+                ['AI Worker', 'kra.name', 'https://kra.name/', __('AI employees for business: website chats, customer messaging and automation.', 'needtome-ai-chat')],
+                ['Obuvnov', 'obuvnov.ru', 'https://obuvnov.ru/', __('A product catalog that processes more than 50 million products from supplier feeds, with city-specific pages and PageSpeed Mobile 100.', 'needtome-ai-chat')],
+                ['O-Keto', 'o-keto.com', 'https://o-keto.com/en/', __('A WordPress and WooCommerce platform for recipes, products, nutrients, quizzes, digital books, multilingual publishing, and ecommerce.', 'needtome-ai-chat')],
+                ['ProTradeJournal', 'protradejournal.net', 'https://protradejournal.net/', __('Browser and desktop trading tools with real-time charts, demo trading, portfolio tracking, and a historical-data testing platform.', 'needtome-ai-chat')],
+                ['TenderClip', 'tenderclip.com', 'https://tenderclip.com/', __('A multilingual WordPress media platform for animated cards and short videos, with subscriptions, a browser editor, and automated publishing. PageSpeed reached 100 on mobile and desktop.', 'needtome-ai-chat')],
             ];
         }
 
@@ -54,7 +54,7 @@ if (! class_exists('Aiworker_Chat_Profile')) {
             if (empty($admin_page_hooks[self::MENU])) {
                 $icon = 'data:image/svg+xml;base64,'.base64_encode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path fill="black" d="M3 2h4l6 9V2h4v16h-4L7 9v9H3z"/></svg>');
                 add_menu_page('NeedToMe', 'NeedToMe', 'manage_options', self::MENU, [self::class, 'menu_page'], $icon, '25.1');
-                add_submenu_page(self::MENU, 'NeedToMe', __('All plugins', 'aiworker-chat'), 'manage_options', self::MENU, [self::class, 'menu_page']);
+                add_submenu_page(self::MENU, 'NeedToMe', __('All plugins', 'needtome-ai-chat'), 'manage_options', self::MENU, [self::class, 'menu_page']);
             }
             if (! has_action('admin_page_access_denied', [self::class, 'old_url'])) add_action('admin_page_access_denied', [self::class, 'old_url']);
             return (string) add_submenu_page(self::MENU, $title, $menuTitle !== '' ? $menuTitle : $title, $capability, $slug, $callback);
@@ -85,22 +85,22 @@ if (! class_exists('Aiworker_Chat_Profile')) {
             self::contacts();
             echo '</aside><div class="ntm-profile__content">';
             ?>
-            <h2><?php esc_html_e('Our WordPress plugins', 'aiworker-chat'); ?></h2>
+            <h2><?php esc_html_e('Our WordPress plugins', 'needtome-ai-chat'); ?></h2>
             <table class="widefat striped">
-              <thead><tr><th><?php esc_html_e('Plugin', 'aiworker-chat'); ?></th><th><?php esc_html_e('What it does', 'aiworker-chat'); ?></th><th><?php esc_html_e('On this site', 'aiworker-chat'); ?></th></tr></thead>
+              <thead><tr><th><?php esc_html_e('Plugin', 'needtome-ai-chat'); ?></th><th><?php esc_html_e('What it does', 'needtome-ai-chat'); ?></th><th><?php esc_html_e('On this site', 'needtome-ai-chat'); ?></th></tr></thead>
               <tbody>
                 <?php foreach (self::plugins() as $slug => $p) : $file = $slug.'/'.$slug.'.php'; ?>
                   <tr>
                     <td><strong><?php echo esc_html($p['name']); ?></strong></td>
                     <td><?php echo esc_html($p['text']); ?></td>
                     <td><?php if (is_plugin_active($file) && ! empty($_registered_pages[get_plugin_page_hookname($p['page'], self::MENU)])) : ?>
-                        <a class="button" href="<?php echo esc_url(self::url($p['page'])); ?>"><?php esc_html_e('Settings', 'aiworker-chat'); ?></a>
+                        <a class="button" href="<?php echo esc_url(self::url($p['page'])); ?>"><?php esc_html_e('Settings', 'needtome-ai-chat'); ?></a>
                       <?php elseif (isset($installed[$file])) : ?>
-                        <a href="<?php echo esc_url(admin_url('plugins.php')); ?>"><?php esc_html_e('Installed, not active', 'aiworker-chat'); ?></a>
+                        <a href="<?php echo esc_url(admin_url('plugins.php')); ?>"><?php esc_html_e('Installed, not active', 'needtome-ai-chat'); ?></a>
                       <?php else : ?>
-                        <a href="<?php echo esc_url($p['demo']); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Demo', 'aiworker-chat'); ?></a> ·
+                        <a href="<?php echo esc_url($p['demo']); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Demo', 'needtome-ai-chat'); ?></a> ·
                         <?php if ($p['wporg'] !== '') : ?><a href="<?php echo esc_url($p['wporg']); ?>" target="_blank" rel="noopener noreferrer">WordPress.org</a>
-                        <?php else : ?><a href="<?php echo esc_url($p['zip']); ?>"><?php esc_html_e('Download ZIP', 'aiworker-chat'); ?></a><?php endif; ?>
+                        <?php else : ?><a href="<?php echo esc_url($p['zip']); ?>"><?php esc_html_e('Download ZIP', 'needtome-ai-chat'); ?></a><?php endif; ?>
                       <?php endif; ?></td>
                   </tr>
                 <?php endforeach; ?>
@@ -112,7 +112,7 @@ if (! class_exists('Aiworker_Chat_Profile')) {
 
         /** The labels of the two profile tabs, for the plugin's tab bar: 'plugins' and 'development'. */
         public static function tab_labels(): array {
-            return ['plugins' => __('Other plugins', 'aiworker-chat'), 'development' => __('Website Development', 'aiworker-chat')];
+            return ['plugins' => __('Other plugins', 'needtome-ai-chat'), 'development' => __('Website Development', 'needtome-ai-chat')];
         }
 
         /**
@@ -123,18 +123,18 @@ if (! class_exists('Aiworker_Chat_Profile')) {
         public static function support_box(string $name): void {
             self::styles();
             $links = [
-                ['DonationAlerts', 'https://www.donationalerts.com/r/needtome', __('My current donation page.', 'aiworker-chat')],
-                ['Patreon', 'https://patreon.com/needtome', __('Best known for recurring support and membership tiers.', 'aiworker-chat')],
+                ['DonationAlerts', 'https://www.donationalerts.com/r/needtome', __('My current donation page.', 'needtome-ai-chat')],
+                ['Patreon', 'https://patreon.com/needtome', __('Best known for recurring support and membership tiers.', 'needtome-ai-chat')],
             ];
             ?>
             <div class="ntm-support">
               <div class="ntm-support__hero">
                 <div class="ntm-support__visual"><svg class="ntm-support__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640" aria-hidden="true" focusable="false"><path fill="#74c0fc" d="M320 48c-13 0-24 11-24 24v12h-2a66 66 0 0 0-8 132l61 8q8 1 9 10-1 9-10 10h-74a28 28 0 1 0 0 56h24v12a24 24 0 1 0 48 0v-12h2a66 66 0 0 0 8-132l-61-7q-8-2-9-11 1-9 10-10h66a28 28 0 1 0 0-56h-16V72c0-13-11-24-24-24M141 406l-42 42H64c-18 0-32 14-32 32v64c0 18 14 32 32 32h321q45 0 80-26l127-94a40 40 0 1 0-48-64l-119 88H312a24 24 0 1 1 0-48h72a32 32 0 1 0 0-64H232c-34 0-67 14-91 38"/></svg></div>
                 <div>
-                  <p class="ntm-support__title"><?php esc_html_e('Support the development of the plugin', 'aiworker-chat'); ?></p>
+                  <p class="ntm-support__title"><?php esc_html_e('Support the development of the plugin', 'needtome-ai-chat'); ?></p>
                   <p class="ntm-support__text"><?php
                     /* translators: %s: plugin name */
-                    echo esc_html(sprintf(__('If %s helps your site, you can support its further development and maintenance via the services below.', 'aiworker-chat'), $name)); ?></p>
+                    echo esc_html(sprintf(__('If %s helps your site, you can support its further development and maintenance via the services below.', 'needtome-ai-chat'), $name)); ?></p>
                 </div>
               </div>
               <ul>
@@ -163,17 +163,17 @@ if (! class_exists('Aiworker_Chat_Profile')) {
 
         private static function plugins_tab(string $current): void {
             ?>
-            <h2><?php esc_html_e('Other WordPress plugins', 'aiworker-chat'); ?></h2>
+            <h2><?php esc_html_e('Other WordPress plugins', 'needtome-ai-chat'); ?></h2>
             <table class="widefat striped">
-              <thead><tr><th><?php esc_html_e('Plugin', 'aiworker-chat'); ?></th><th><?php esc_html_e('What it does', 'aiworker-chat'); ?></th><th><?php esc_html_e('Links', 'aiworker-chat'); ?></th></tr></thead>
+              <thead><tr><th><?php esc_html_e('Plugin', 'needtome-ai-chat'); ?></th><th><?php esc_html_e('What it does', 'needtome-ai-chat'); ?></th><th><?php esc_html_e('Links', 'needtome-ai-chat'); ?></th></tr></thead>
               <tbody>
                 <?php foreach (self::plugins() as $slug => $p) : if ($slug === $current) continue; ?>
                   <tr>
                     <td><strong><?php echo esc_html($p['name']); ?></strong></td>
                     <td><?php echo esc_html($p['text']); ?></td>
-                    <td><a href="<?php echo esc_url($p['demo']); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Demo', 'aiworker-chat'); ?></a> ·
+                    <td><a href="<?php echo esc_url($p['demo']); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Demo', 'needtome-ai-chat'); ?></a> ·
                       <?php if ($p['wporg'] !== '') : ?><a href="<?php echo esc_url($p['wporg']); ?>" target="_blank" rel="noopener noreferrer">WordPress.org</a>
-                      <?php else : ?><a href="<?php echo esc_url($p['zip']); ?>"><?php esc_html_e('Download ZIP', 'aiworker-chat'); ?></a><?php endif; ?></td>
+                      <?php else : ?><a href="<?php echo esc_url($p['zip']); ?>"><?php esc_html_e('Download ZIP', 'needtome-ai-chat'); ?></a><?php endif; ?></td>
                   </tr>
                 <?php endforeach; ?>
               </tbody>
@@ -183,23 +183,23 @@ if (! class_exists('Aiworker_Chat_Profile')) {
 
         private static function development_tab(): void {
             ?>
-            <h2><?php esc_html_e('Website Development', 'aiworker-chat'); ?></h2>
-            <p class="ntm-profile__lead"><?php esc_html_e('Senior web developer with 15+ years in commercial development and 400+ delivered or optimized websites and platforms. I build high-performance WordPress products, custom business systems, large catalogs, marketplaces, trading tools, and automation workflows. I have published 13 technical books and work in production with full-stack JavaScript, Python/FastAPI, Node.js automation, Asterisk, parsers, bots, and performance engineering.', 'aiworker-chat'); ?></p>
-            <p class="description"><?php esc_html_e('Originally from Ukraine; based in Chișinău, Moldova.', 'aiworker-chat'); ?></p>
-            <p class="ntm-profile__rate"><strong><?php esc_html_e('Custom website and plugin development', 'aiworker-chat'); ?>:</strong> <span><?php esc_html_e('$30/hour', 'aiworker-chat'); ?></span></p>
+            <h2><?php esc_html_e('Website Development', 'needtome-ai-chat'); ?></h2>
+            <p class="ntm-profile__lead"><?php esc_html_e('Senior web developer with 15+ years in commercial development and 400+ delivered or optimized websites and platforms. I build high-performance WordPress products, custom business systems, large catalogs, marketplaces, trading tools, and automation workflows. I have published 13 technical books and work in production with full-stack JavaScript, Python/FastAPI, Node.js automation, Asterisk, parsers, bots, and performance engineering.', 'needtome-ai-chat'); ?></p>
+            <p class="description"><?php esc_html_e('Originally from Ukraine; based in Chișinău, Moldova.', 'needtome-ai-chat'); ?></p>
+            <p class="ntm-profile__rate"><strong><?php esc_html_e('Custom website and plugin development', 'needtome-ai-chat'); ?>:</strong> <span><?php esc_html_e('$30/hour', 'needtome-ai-chat'); ?></span></p>
 
-            <h3><?php esc_html_e('What I can build', 'aiworker-chat'); ?></h3>
+            <h3><?php esc_html_e('What I can build', 'needtome-ai-chat'); ?></h3>
             <ul class="ntm-profile__services">
-              <li><?php esc_html_e('WordPress and WooCommerce websites, plugins, custom themes, and integrations.', 'aiworker-chat'); ?></li>
-              <li><?php esc_html_e('Custom business systems, marketplaces, catalogs, aggregators, and data import pipelines.', 'aiworker-chat'); ?></li>
-              <li><?php esc_html_e('Performance optimization, PageSpeed, technical SEO, and responsive interfaces.', 'aiworker-chat'); ?></li>
-              <li><?php esc_html_e('Automation and integrations with PHP, JavaScript, Node.js, Python/FastAPI, APIs, CRM systems, Telegram, and Asterisk.', 'aiworker-chat'); ?></li>
-              <li><?php esc_html_e('AI-assisted workflows, parsers, bots, PDF and Word generation, and internal tools.', 'aiworker-chat'); ?></li>
+              <li><?php esc_html_e('WordPress and WooCommerce websites, plugins, custom themes, and integrations.', 'needtome-ai-chat'); ?></li>
+              <li><?php esc_html_e('Custom business systems, marketplaces, catalogs, aggregators, and data import pipelines.', 'needtome-ai-chat'); ?></li>
+              <li><?php esc_html_e('Performance optimization, PageSpeed, technical SEO, and responsive interfaces.', 'needtome-ai-chat'); ?></li>
+              <li><?php esc_html_e('Automation and integrations with PHP, JavaScript, Node.js, Python/FastAPI, APIs, CRM systems, Telegram, and Asterisk.', 'needtome-ai-chat'); ?></li>
+              <li><?php esc_html_e('AI-assisted workflows, parsers, bots, PDF and Word generation, and internal tools.', 'needtome-ai-chat'); ?></li>
             </ul>
 
-            <h3><?php esc_html_e('Selected projects', 'aiworker-chat'); ?></h3>
+            <h3><?php esc_html_e('Selected projects', 'needtome-ai-chat'); ?></h3>
             <table class="widefat striped">
-              <thead><tr><th><?php esc_html_e('Project', 'aiworker-chat'); ?></th><th><?php esc_html_e('What it is', 'aiworker-chat'); ?></th><th><?php esc_html_e('Site', 'aiworker-chat'); ?></th></tr></thead>
+              <thead><tr><th><?php esc_html_e('Project', 'needtome-ai-chat'); ?></th><th><?php esc_html_e('What it is', 'needtome-ai-chat'); ?></th><th><?php esc_html_e('Site', 'needtome-ai-chat'); ?></th></tr></thead>
               <tbody>
                 <?php foreach (self::projects() as $p) : ?>
                   <tr><td><strong><?php echo esc_html($p[0]); ?></strong></td><td><?php echo esc_html($p[3]); ?></td><td><a href="<?php echo esc_url($p[2]); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html($p[1]); ?></a></td></tr>
@@ -207,21 +207,21 @@ if (! class_exists('Aiworker_Chat_Profile')) {
               </tbody>
             </table>
 
-            <p><?php esc_html_e('The resume includes additional projects, technical background, and work history.', 'aiworker-chat'); ?></p>
+            <p><?php esc_html_e('The resume includes additional projects, technical background, and work history.', 'needtome-ai-chat'); ?></p>
             <ul>
-              <li><a href="https://docs.google.com/document/d/11w_tmtQbJ7ebcQHQi7jE9Y5WClfVHyMtxbR3-GW3b-s/edit?usp=sharing" target="_blank" rel="noopener noreferrer"><?php esc_html_e('WordPress and full-stack development resume', 'aiworker-chat'); ?></a></li>
-              <li><a href="https://docs.google.com/document/d/1tbHaxGPeN9je1qozgkQcX3djzaTrpR_MLvghjqMAuFM/edit?usp=sharing" target="_blank" rel="noopener noreferrer"><?php esc_html_e('AI and automation resume', 'aiworker-chat'); ?></a></li>
-              <li><a href="https://needtome.com/" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Portfolio and contact page', 'aiworker-chat'); ?></a></li>
+              <li><a href="https://docs.google.com/document/d/11w_tmtQbJ7ebcQHQi7jE9Y5WClfVHyMtxbR3-GW3b-s/edit?usp=sharing" target="_blank" rel="noopener noreferrer"><?php esc_html_e('WordPress and full-stack development resume', 'needtome-ai-chat'); ?></a></li>
+              <li><a href="https://docs.google.com/document/d/1tbHaxGPeN9je1qozgkQcX3djzaTrpR_MLvghjqMAuFM/edit?usp=sharing" target="_blank" rel="noopener noreferrer"><?php esc_html_e('AI and automation resume', 'needtome-ai-chat'); ?></a></li>
+              <li><a href="https://needtome.com/" target="_blank" rel="noopener noreferrer"><?php esc_html_e('Portfolio and contact page', 'needtome-ai-chat'); ?></a></li>
             </ul>
             <?php
         }
 
         private static function contacts(): void {
             $contacts = [
-                [__('Email', 'aiworker-chat'), 'paraz0n3@gmail.com', 'mailto:paraz0n3@gmail.com'],
-                [__('LinkedIn', 'aiworker-chat'), 'Roman Klymenko', 'https://www.linkedin.com/in/roman-klymenko-parad0x/'],
-                [__('Viber', 'aiworker-chat'), '+380935523587', 'viber://chat?number=%2B380935523587'],
-                [__('Telegram', 'aiworker-chat'), 'klymenko_roman', 'https://t.me/klymenko_roman'],
+                [__('Email', 'needtome-ai-chat'), 'paraz0n3@gmail.com', 'mailto:paraz0n3@gmail.com'],
+                [__('LinkedIn', 'needtome-ai-chat'), 'Roman Klymenko', 'https://www.linkedin.com/in/roman-klymenko-parad0x/'],
+                [__('Viber', 'needtome-ai-chat'), '+380935523587', 'viber://chat?number=%2B380935523587'],
+                [__('Telegram', 'needtome-ai-chat'), 'klymenko_roman', 'https://t.me/klymenko_roman'],
             ];
             foreach ($contacts as $c) {
                 printf('<a href="%1$s" class="ntm-profile__contact"%2$s><strong>%3$s:</strong><br>%4$s</a>',

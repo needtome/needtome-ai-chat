@@ -54,7 +54,7 @@ function aiworker_chat_remote_chat_save(): void {
     $result = aiworker_chat_api('PATCH', '/plugin/chat?chat_id='.$chat.'&lang='.aiworker_chat_wizard_lang(), ['chat' => (object) $out, 'updated_at' => $updated] + ($delivery ? ['leads_delivery' => $delivery] : []), 20);
     // the consultant's name and the preview come from the key check and the account's chats: read them again
     if ($result['code'] === 200) { delete_transient('aiworker_chat_check'); aiworker_chat_forget_me(); }
-    wp_send_json(['code' => $result['code'], 'body' => $result['body'], 'error' => $result['error'] !== '' ? __('kra.name cannot be reached from this site.', 'aiworker-chat') : '']);
+    wp_send_json(['code' => $result['code'], 'body' => $result['body'], 'error' => $result['error'] !== '' ? __('kra.name cannot be reached from this site.', 'needtome-ai-chat') : '']);
 }
 add_action('wp_ajax_aiwc_chat_save', 'aiworker_chat_remote_chat_save');
 
@@ -68,7 +68,7 @@ function aiworker_chat_remote_chat_tool(): void {
     if ($op === 'test') $result = aiworker_chat_api('POST', '/plugin/chat/leads/test'.$q, [], 60);
     elseif ($op === 'translate') $result = aiworker_chat_api('POST', '/plugin/chat/translate'.$q, ['source_language' => isset($_POST['source']) ? sanitize_key(wp_unslash((string) $_POST['source'])) : ''], 90);
     else wp_send_json(['code' => 400, 'body' => []], 400);
-    wp_send_json(['code' => $result['code'], 'body' => $result['body'], 'error' => $result['error'] !== '' ? __('kra.name cannot be reached from this site.', 'aiworker-chat') : '']);
+    wp_send_json(['code' => $result['code'], 'body' => $result['body'], 'error' => $result['error'] !== '' ? __('kra.name cannot be reached from this site.', 'needtome-ai-chat') : '']);
 }
 add_action('wp_ajax_aiwc_chat_tool', 'aiworker_chat_remote_chat_tool');
 
@@ -95,74 +95,74 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
     ?>
     <section class="aiwc-card aiwc-chatset<?php echo count($parts) === 1 ? ' aiwc-chatset--single' : ''; ?>" id="<?php echo esc_attr($id); ?>" data-updated="<?php echo esc_attr((string) ($data['updated_at'] ?? '')); ?>">
       <?php if ($has('knowledge') && count($parts) === 1) : ?>
-      <h2><?php esc_html_e('What the consultant answers from', 'aiworker-chat'); ?></h2>
+      <h2><?php esc_html_e('What the consultant answers from', 'needtome-ai-chat'); ?></h2>
       <?php else : ?>
-      <h2><?php if ($number > 0) : ?><span class="aiwc-num"><?php echo esc_html((string) $number); ?></span><?php endif; ?><?php esc_html_e('Consultant and chat texts', 'aiworker-chat'); ?></h2>
+      <h2><?php if ($number > 0) : ?><span class="aiwc-num"><?php echo esc_html((string) $number); ?></span><?php endif; ?><?php esc_html_e('Consultant and chat texts', 'needtome-ai-chat'); ?></h2>
       <?php endif; ?>
-      <p class="aiwc-lead"><?php esc_html_e('The same settings as in the chat\'s settings at kra.name: a change saved here is there at once, and a change made there shows here.', 'aiworker-chat'); ?></p>
+      <p class="aiwc-lead"><?php esc_html_e('The same settings as in the chat\'s settings at kra.name: a change saved here is there at once, and a change made there shows here.', 'needtome-ai-chat'); ?></p>
       <div class="aiwc-chatset__notice notice inline" data-cs="notice" hidden><p></p></div>
 
       <?php if ($has('persona') && count((array) ($data['personas'] ?? [])) > 1) : // with one consultant there is nothing to choose ?>
-      <div class="aiwc-row"><div class="aiwc-row__label"><label for="aiwc-cs-persona"><?php esc_html_e('Consultant', 'aiworker-chat'); ?></label></div><div class="aiwc-row__control">
+      <div class="aiwc-row"><div class="aiwc-row__label"><label for="aiwc-cs-persona"><?php esc_html_e('Consultant', 'needtome-ai-chat'); ?></label></div><div class="aiwc-row__control">
         <select id="aiwc-cs-persona" data-cs-field="persona_id">
           <?php foreach ((array) ($data['personas'] ?? []) as $p) : ?>
             <option value="<?php echo esc_attr((string) (int) $p['id']); ?>"<?php selected((int) $p['id'], (int) ($chat['persona_id'] ?? 0)); ?>><?php echo esc_html(trim((string) $p['name'].((string) ($p['title'] ?? '') !== '' ? ' — '.$p['title'] : ''))); ?></option>
           <?php endforeach; ?>
         </select>
-        <p class="description"><?php esc_html_e('The consultant\'s role and instructions are edited in the kra.name panel or by the setup wizard.', 'aiworker-chat'); ?></p>
+        <p class="description"><?php esc_html_e('The consultant\'s role and instructions are edited in the kra.name panel or by the setup wizard.', 'needtome-ai-chat'); ?></p>
       </div></div>
       <?php endif; ?>
       <?php if ($has('texts')) : ?>
 
-      <div class="aiwc-row"><div class="aiwc-row__label"><?php esc_html_e('Texts by language', 'aiworker-chat'); ?></div><div class="aiwc-row__control">
+      <div class="aiwc-row"><div class="aiwc-row__label"><?php esc_html_e('Texts by language', 'needtome-ai-chat'); ?></div><div class="aiwc-row__control">
         <?php if (count($langs) > 1) : ?>
         <div class="aiwc-chatset__langs" role="tablist">
           <?php foreach ($langs as $i => $l) : ?><button type="button" role="tab" class="aiwc-chatset__lang<?php echo $i === 0 ? ' is-active' : ''; ?>" data-cs-lang="<?php echo esc_attr($l); ?>"><?php echo esc_html($names[$l] ?? strtoupper($l)); ?></button><?php endforeach; ?>
-          <span class="aiwc-chatset__translate"><?php esc_html_e('Fill the empty fields of the other languages by translating from', 'aiworker-chat'); ?>
+          <span class="aiwc-chatset__translate"><?php esc_html_e('Fill the empty fields of the other languages by translating from', 'needtome-ai-chat'); ?>
             <select data-cs="source"><?php foreach ($langs as $l) : ?><option value="<?php echo esc_attr($l); ?>"<?php selected($l, (string) ($chat['default_lang'] ?? '')); ?>><?php echo esc_html($names[$l] ?? strtoupper($l)); ?></option><?php endforeach; ?></select>
-            <button type="button" class="button" data-cs="translate"><?php esc_html_e('Translate', 'aiworker-chat'); ?></button></span>
+            <button type="button" class="button" data-cs="translate"><?php esc_html_e('Translate', 'needtome-ai-chat'); ?></button></span>
         </div>
         <?php endif; ?>
         <?php foreach ($langs as $i => $l) : $tx = (array) ($chat['texts'][$l] ?? []); $sugg = array_values((array) ($tx['suggestions'] ?? [])); ?>
         <div class="aiwc-chatset__texts" data-cs-pane="<?php echo esc_attr($l); ?>"<?php echo $i === 0 ? '' : ' hidden'; ?>>
-          <label class="aiwc-chatset__label" for="aiwc-cs-<?php echo esc_attr($l); ?>-greeting"><?php esc_html_e('Greeting', 'aiworker-chat'); ?></label>
+          <label class="aiwc-chatset__label" for="aiwc-cs-<?php echo esc_attr($l); ?>-greeting"><?php esc_html_e('Greeting', 'needtome-ai-chat'); ?></label>
           <textarea id="aiwc-cs-<?php echo esc_attr($l); ?>-greeting" rows="3" maxlength="<?php echo esc_attr((string) $max('greeting_max', 300)); ?>" data-cs-field="texts.<?php echo esc_attr($l); ?>.greeting"><?php echo esc_textarea((string) ($tx['greeting'] ?? '')); ?></textarea>
           <span class="aiwc-chatset__err" data-cs-error="texts.<?php echo esc_attr($l); ?>.greeting" hidden></span>
-          <span class="aiwc-chatset__label"><?php esc_html_e('Quick questions', 'aiworker-chat'); ?></span>
-          <p class="description"><?php esc_html_e('Buttons under the greeting; a visitor asks with one click. Empty lines are not shown.', 'aiworker-chat'); ?></p>
+          <span class="aiwc-chatset__label"><?php esc_html_e('Quick questions', 'needtome-ai-chat'); ?></span>
+          <p class="description"><?php esc_html_e('Buttons under the greeting; a visitor asks with one click. Empty lines are not shown.', 'needtome-ai-chat'); ?></p>
           <?php for ($k = 0; $k < $max('suggestions_max', 4); $k++) : ?>
-            <input type="text" class="regular-text aiwc-chatset__sugg" value="<?php echo esc_attr((string) ($sugg[$k] ?? '')); ?>" data-cs-sugg="<?php echo esc_attr($l); ?>" aria-label="<?php echo esc_attr(sprintf(/* translators: %d: number of the quick question */ __('Quick question %d', 'aiworker-chat'), $k + 1)); ?>">
+            <input type="text" class="regular-text aiwc-chatset__sugg" value="<?php echo esc_attr((string) ($sugg[$k] ?? '')); ?>" data-cs-sugg="<?php echo esc_attr($l); ?>" aria-label="<?php echo esc_attr(sprintf(/* translators: %d: number of the quick question */ __('Quick question %d', 'needtome-ai-chat'), $k + 1)); ?>">
           <?php endfor; ?>
           <span class="aiwc-chatset__err" data-cs-error="texts.<?php echo esc_attr($l); ?>.suggestions" hidden></span>
           <div class="aiwc-chatset__trio">
-            <label><span class="aiwc-chatset__label"><?php esc_html_e('Name in the chat header', 'aiworker-chat'); ?></span><input type="text" maxlength="<?php echo esc_attr((string) $max('name_max', 60)); ?>" value="<?php echo esc_attr((string) ($tx['name'] ?? '')); ?>" placeholder="<?php echo esc_attr((string) ($tx['name_fallback'] ?? '') !== '' ? (string) $tx['name_fallback'] : __('The consultant\'s name', 'aiworker-chat')); ?>" data-cs-field="texts.<?php echo esc_attr($l); ?>.name"></label>
-            <label><span class="aiwc-chatset__label"><?php esc_html_e('Caption under the name', 'aiworker-chat'); ?></span><input type="text" maxlength="<?php echo esc_attr((string) $max('title_max', 80)); ?>" value="<?php echo esc_attr((string) ($tx['title'] ?? '')); ?>" placeholder="<?php echo esc_attr((string) ($tx['title_fallback'] ?? '') !== '' ? (string) $tx['title_fallback'] : __('The consultant\'s role', 'aiworker-chat')); ?>" data-cs-field="texts.<?php echo esc_attr($l); ?>.title"></label>
-            <label><span class="aiwc-chatset__label"><?php esc_html_e('Side tab label', 'aiworker-chat'); ?></span><input type="text" maxlength="<?php echo esc_attr((string) $max('tab_label_max', 60)); ?>" value="<?php echo esc_attr((string) ($tx['tab_label'] ?? '')); ?>" placeholder="<?php echo esc_attr((string) ($tx['name_fallback'] ?? '') !== '' ? (string) $tx['name_fallback'] : __('The consultant\'s name', 'aiworker-chat')); ?>" data-cs-field="texts.<?php echo esc_attr($l); ?>.tab_label"></label>
+            <label><span class="aiwc-chatset__label"><?php esc_html_e('Name in the chat header', 'needtome-ai-chat'); ?></span><input type="text" maxlength="<?php echo esc_attr((string) $max('name_max', 60)); ?>" value="<?php echo esc_attr((string) ($tx['name'] ?? '')); ?>" placeholder="<?php echo esc_attr((string) ($tx['name_fallback'] ?? '') !== '' ? (string) $tx['name_fallback'] : __('The consultant\'s name', 'needtome-ai-chat')); ?>" data-cs-field="texts.<?php echo esc_attr($l); ?>.name"></label>
+            <label><span class="aiwc-chatset__label"><?php esc_html_e('Caption under the name', 'needtome-ai-chat'); ?></span><input type="text" maxlength="<?php echo esc_attr((string) $max('title_max', 80)); ?>" value="<?php echo esc_attr((string) ($tx['title'] ?? '')); ?>" placeholder="<?php echo esc_attr((string) ($tx['title_fallback'] ?? '') !== '' ? (string) $tx['title_fallback'] : __('The consultant\'s role', 'needtome-ai-chat')); ?>" data-cs-field="texts.<?php echo esc_attr($l); ?>.title"></label>
+            <label><span class="aiwc-chatset__label"><?php esc_html_e('Side tab label', 'needtome-ai-chat'); ?></span><input type="text" maxlength="<?php echo esc_attr((string) $max('tab_label_max', 60)); ?>" value="<?php echo esc_attr((string) ($tx['tab_label'] ?? '')); ?>" placeholder="<?php echo esc_attr((string) ($tx['name_fallback'] ?? '') !== '' ? (string) $tx['name_fallback'] : __('The consultant\'s name', 'needtome-ai-chat')); ?>" data-cs-field="texts.<?php echo esc_attr($l); ?>.tab_label"></label>
           </div>
-          <p class="description"><?php esc_html_e('An empty field shows what is greyed out in it: the consultant\'s own name and role.', 'aiworker-chat'); ?></p>
+          <p class="description"><?php esc_html_e('An empty field shows what is greyed out in it: the consultant\'s own name and role.', 'needtome-ai-chat'); ?></p>
         </div>
         <?php endforeach; ?>
         <?php if (count($langs) > 1) : ?>
-        <p class="aiwc-chatset__default"><label><?php esc_html_e('Default language', 'aiworker-chat'); ?>
+        <p class="aiwc-chatset__default"><label><?php esc_html_e('Default language', 'needtome-ai-chat'); ?>
           <select data-cs-field="default_lang"><?php foreach ($langs as $l) : ?><option value="<?php echo esc_attr($l); ?>"<?php selected($l, (string) ($chat['default_lang'] ?? '')); ?>><?php echo esc_html($names[$l] ?? strtoupper($l)); ?></option><?php endforeach; ?></select></label>
-          <span class="description"><?php esc_html_e('when the page\'s language is not one of the chat\'s', 'aiworker-chat'); ?></span></p>
+          <span class="description"><?php esc_html_e('when the page\'s language is not one of the chat\'s', 'needtome-ai-chat'); ?></span></p>
         <?php endif; ?>
       </div></div>
-      <div class="aiwc-row"><div class="aiwc-row__label"><?php esc_html_e('In the chat', 'aiworker-chat'); ?></div><div class="aiwc-row__control">
-        <label class="aiwc-check"><input type="checkbox" data-cs-field="ai_notice"<?php checked(($chat['ai_notice'] ?? true) !== false); ?>> <span><?php esc_html_e('Say that an AI answers and its answers may be inaccurate', 'aiworker-chat'); ?></span></label>
-        <p class="description"><?php esc_html_e('A short note under the chat\'s input: an AI assistant answers, answers may be inaccurate, check what matters with the staff. It lowers the risk of claims over a wrong answer; we recommend keeping it on.', 'aiworker-chat'); ?></p>
-        <label class="aiwc-check"><input type="checkbox" data-cs-field="greet_popup"<?php checked(! empty($chat['greet_popup'])); ?>> <span><?php esc_html_e('Show the AI\'s greeting when a page opens', 'aiworker-chat'); ?></span></label>
-        <p class="description"><?php esc_html_e('The consultant\'s greeting, the same as at the start of the dialog, appears next to the chat button for a few seconds. Once per visitor session; not shown when the visitor has already written.', 'aiworker-chat'); ?></p>
+      <div class="aiwc-row"><div class="aiwc-row__label"><?php esc_html_e('In the chat', 'needtome-ai-chat'); ?></div><div class="aiwc-row__control">
+        <label class="aiwc-check"><input type="checkbox" data-cs-field="ai_notice"<?php checked(($chat['ai_notice'] ?? true) !== false); ?>> <span><?php esc_html_e('Say that an AI answers and its answers may be inaccurate', 'needtome-ai-chat'); ?></span></label>
+        <p class="description"><?php esc_html_e('A short note under the chat\'s input: an AI assistant answers, answers may be inaccurate, check what matters with the staff. It lowers the risk of claims over a wrong answer; we recommend keeping it on.', 'needtome-ai-chat'); ?></p>
+        <label class="aiwc-check"><input type="checkbox" data-cs-field="greet_popup"<?php checked(! empty($chat['greet_popup'])); ?>> <span><?php esc_html_e('Show the AI\'s greeting when a page opens', 'needtome-ai-chat'); ?></span></label>
+        <p class="description"><?php esc_html_e('The consultant\'s greeting, the same as at the start of the dialog, appears next to the chat button for a few seconds. Once per visitor session; not shown when the visitor has already written.', 'needtome-ai-chat'); ?></p>
       </div></div>
 
       <?php endif; ?>
       <?php if ($has('leads')) : ?>
-      <div class="aiwc-row"><div class="aiwc-row__label"><?php esc_html_e('Leads', 'aiworker-chat'); ?></div><div class="aiwc-row__control">
-        <label class="aiwc-check"><input type="checkbox" data-cs-field="leads_enabled"<?php checked(! empty($chat['leads_enabled'])); ?>> <span><?php esc_html_e('Collect visitors\' contacts: name, phone or email and what they need', 'aiworker-chat'); ?></span></label>
-        <p class="description"><?php esc_html_e('When a visitor wants to get in touch, order or book, the consultant asks for a contact and passes the lead on.', 'aiworker-chat'); ?></p>
+      <div class="aiwc-row"><div class="aiwc-row__label"><?php esc_html_e('Leads', 'needtome-ai-chat'); ?></div><div class="aiwc-row__control">
+        <label class="aiwc-check"><input type="checkbox" data-cs-field="leads_enabled"<?php checked(! empty($chat['leads_enabled'])); ?>> <span><?php esc_html_e('Collect visitors\' contacts: name, phone or email and what they need', 'needtome-ai-chat'); ?></span></label>
+        <p class="description"><?php esc_html_e('When a visitor wants to get in touch, order or book, the consultant asks for a contact and passes the lead on.', 'needtome-ai-chat'); ?></p>
         <?php $ld = is_array($data['leads_delivery'] ?? null) ? $data['leads_delivery'] : null; if ($ld) : ?>
         <div class="aiwc-ld" data-cs="delivery"<?php echo empty($chat['leads_enabled']) ? ' hidden' : ''; ?>>
-          <p class="aiwc-ld__head"><label class="aiwc-check"><input type="checkbox" data-ld="enabled"<?php checked(! empty($ld['enabled'])); ?>> <b><?php esc_html_e('Send leads', 'aiworker-chat'); ?></b></label>
+          <p class="aiwc-ld__head"><label class="aiwc-check"><input type="checkbox" data-ld="enabled"<?php checked(! empty($ld['enabled'])); ?>> <b><?php esc_html_e('Send leads', 'needtome-ai-chat'); ?></b></label>
             <span class="description"><?php echo esc_html((string) ($ld['current'] ?? '')); ?></span></p>
           <div class="aiwc-ld__chips">
             <?php foreach ((array) ($ld['channels'] ?? []) as $chn) : if (! is_array($chn)) continue; ?>
@@ -185,17 +185,17 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
                   <?php if ($ft === 'select') : ?>
                     <select data-ld-field="<?php echo esc_attr($key); ?>"><?php foreach ((array) ($f['options'] ?? []) as $o) : ?><option value="<?php echo esc_attr((string) $o['value']); ?>"<?php selected((string) $o['value'], (string) ($f['value'] ?? '')); ?>><?php echo esc_html((string) $o['label']); ?></option><?php endforeach; ?></select>
                   <?php else : ?>
-                    <input type="<?php echo esc_attr($ft === 'secret' ? 'password' : ($ft === 'email' ? 'email' : ($ft === 'url' ? 'url' : 'text'))); ?>" class="regular-text" autocomplete="<?php echo $ft === 'secret' ? 'new-password' : 'off'; ?>" data-ld-field="<?php echo esc_attr($key); ?>" data-ld-secret="<?php echo $ft === 'secret' ? '1' : '0'; ?>" value="<?php echo esc_attr($ft === 'secret' ? '' : (string) ($f['value'] ?? '')); ?>"<?php if ($ft === 'secret' && ! empty($f['set'])) : ?> placeholder="<?php esc_attr_e('Saved — leave empty to keep it', 'aiworker-chat'); ?>"<?php elseif ((string) ($f['placeholder'] ?? '') !== '') : ?> placeholder="<?php echo esc_attr((string) $f['placeholder']); ?>"<?php elseif ($ft === 'email' && $ownerEmail !== '') : ?> placeholder="<?php echo esc_attr($ownerEmail); ?>"<?php endif; ?>>
+                    <input type="<?php echo esc_attr($ft === 'secret' ? 'password' : ($ft === 'email' ? 'email' : ($ft === 'url' ? 'url' : 'text'))); ?>" class="regular-text" autocomplete="<?php echo $ft === 'secret' ? 'new-password' : 'off'; ?>" data-ld-field="<?php echo esc_attr($key); ?>" data-ld-secret="<?php echo $ft === 'secret' ? '1' : '0'; ?>" value="<?php echo esc_attr($ft === 'secret' ? '' : (string) ($f['value'] ?? '')); ?>"<?php if ($ft === 'secret' && ! empty($f['set'])) : ?> placeholder="<?php esc_attr_e('Saved — leave empty to keep it', 'needtome-ai-chat'); ?>"<?php elseif ((string) ($f['placeholder'] ?? '') !== '') : ?> placeholder="<?php echo esc_attr((string) $f['placeholder']); ?>"<?php elseif ($ft === 'email' && $ownerEmail !== '') : ?> placeholder="<?php echo esc_attr($ownerEmail); ?>"<?php endif; ?>>
                   <?php endif; ?>
                   <?php if (! empty($f['hint'])) : ?><span class="description"><?php echo esc_html((string) $f['hint']); ?></span><?php endif; ?>
                   <span class="aiwc-chatset__err" data-cs-error="leads_delivery.<?php echo esc_attr($type.'.'.$key); ?>" hidden></span>
                 </label>
               <?php endforeach; ?>
-              <?php if ($connect !== '' && preg_match('#^https://kra\.name/#', $connect)) : ?><p><a class="button" href="<?php echo esc_url($connect); ?>" target="_blank" rel="noopener"><?php echo esc_html(sprintf(/* translators: %s: channel name */ __('Connect %s in the kra.name panel', 'aiworker-chat'), (string) $chn['label'])); ?></a></p><?php endif; ?>
+              <?php if ($connect !== '' && preg_match('#^https://kra\.name/#', $connect)) : ?><p><a class="button" href="<?php echo esc_url($connect); ?>" target="_blank" rel="noopener"><?php echo esc_html(sprintf(/* translators: %s: channel name */ __('Connect %s in the kra.name panel', 'needtome-ai-chat'), (string) $chn['label'])); ?></a></p><?php endif; ?>
             </div>
           <?php endforeach; ?>
           <p class="description"><?php echo esc_html((string) ($ld['fallback'] ?? '')); ?></p>
-          <p><button type="button" class="button" data-cs="test"><?php esc_html_e('Test delivery', 'aiworker-chat'); ?></button> <span class="description"><?php esc_html_e('A short test message to every saved channel.', 'aiworker-chat'); ?></span></p>
+          <p><button type="button" class="button" data-cs="test"><?php esc_html_e('Test delivery', 'needtome-ai-chat'); ?></button> <span class="description"><?php esc_html_e('A short test message to every saved channel.', 'needtome-ai-chat'); ?></span></p>
           <ul class="aiwc-ld__results" data-cs="results" hidden></ul>
         </div>
         <?php endif; ?>
@@ -203,18 +203,18 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
 
       <?php endif; ?>
       <?php if ($has('knowledge')) : ?>
-      <div class="aiwc-row"><div class="aiwc-row__label"><?php esc_html_e('What the consultant answers from', 'aiworker-chat'); ?></div><div class="aiwc-row__control">
+      <div class="aiwc-row"><div class="aiwc-row__label"><?php esc_html_e('What the consultant answers from', 'needtome-ai-chat'); ?></div><div class="aiwc-row__control">
         <?php foreach ((array) ($data['options']['knowledge_mode'] ?? []) as $opt) : ?>
           <label class="aiwc-check aiwc-chatset__radio"><input type="radio" name="<?php echo esc_attr($id); ?>_knowledge_mode" value="<?php echo esc_attr((string) $opt['value']); ?>" data-cs-field="knowledge_mode"<?php checked((string) $opt['value'], (string) ($chat['knowledge_mode'] ?? '')); ?>> <span><?php echo esc_html((string) $opt['label']); ?></span></label>
         <?php endforeach; ?>
-        <p class="description"><?php esc_html_e('With general knowledge the consultant answers general questions on the topic too, but prices, terms and contacts come only from your knowledge base.', 'aiworker-chat'); ?></p>
-        <label class="aiwc-check"><input type="checkbox" data-cs-field="use_company_knowledge"<?php checked(! empty($chat['use_company_knowledge'])); ?>> <span><?php esc_html_e('Use the company information from the kra.name panel', 'aiworker-chat'); ?></span></label>
+        <p class="description"><?php esc_html_e('With general knowledge the consultant answers general questions on the topic too, but prices, terms and contacts come only from your knowledge base.', 'needtome-ai-chat'); ?></p>
+        <label class="aiwc-check"><input type="checkbox" data-cs-field="use_company_knowledge"<?php checked(! empty($chat['use_company_knowledge'])); ?>> <span><?php esc_html_e('Use the company information from the kra.name panel', 'needtome-ai-chat'); ?></span></label>
       </div></div>
       <?php endif; ?>
 
       <p class="aiwc-chatset__actions">
         <span class="aiwc-chatset__status" data-cs="status" role="status" aria-live="polite"></span>
-        <?php if (preg_match('#^https://kra\.name/#', $panel)) : ?><a class="aiwc-chatset__panel" href="<?php echo esc_url($panel); ?>" target="_blank" rel="noopener"><?php esc_html_e('All settings in the kra.name panel', 'aiworker-chat'); ?></a><?php endif; ?>
+        <?php if (preg_match('#^https://kra\.name/#', $panel)) : ?><a class="aiwc-chatset__panel" href="<?php echo esc_url($panel); ?>" target="_blank" rel="noopener"><?php esc_html_e('All settings in the kra.name panel', 'needtome-ai-chat'); ?></a><?php endif; ?>
       </p>
     </section>
     <?php if ($script) return; $script = true; ?>
@@ -222,13 +222,13 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
     document.querySelectorAll('.aiwc-chatset').forEach(function (root) {
       // the wizard's script config (nonce, admin-ajax) is printed in the footer, after this block: read it on click
       var t = <?php echo wp_json_encode([
-          'saving' => __('Saving…', 'aiworker-chat'), 'saved' => __('Saved to kra.name.', 'aiworker-chat'), 'nothing' => __('Nothing has changed.', 'aiworker-chat'),
-          'stale' => __('The chat was changed at kra.name after this page was opened. Reload the page to see those changes, then make yours again.', 'aiworker-chat'),
-          'invalid' => __('kra.name did not accept some values: see the fields marked below.', 'aiworker-chat'), 'failed' => __('Not saved: kra.name answered with an error. Try again a bit later.', 'aiworker-chat'),
-          'reload' => __('Reload the page', 'aiworker-chat'),
-          'testing' => __('Sending a test message…', 'aiworker-chat'), 'noChannels' => __('Delivery is off or no channel is saved yet.', 'aiworker-chat'),
-          'translating' => __('Translating…', 'aiworker-chat'), 'translated' => __('The empty fields are filled with the translation. Check them and press «Save settings».', 'aiworker-chat'),
-          'nothingToTranslate' => __('Nothing to translate: the fields of the other languages are filled already.', 'aiworker-chat'),
+          'saving' => __('Saving…', 'needtome-ai-chat'), 'saved' => __('Saved to kra.name.', 'needtome-ai-chat'), 'nothing' => __('Nothing has changed.', 'needtome-ai-chat'),
+          'stale' => __('The chat was changed at kra.name after this page was opened. Reload the page to see those changes, then make yours again.', 'needtome-ai-chat'),
+          'invalid' => __('kra.name did not accept some values: see the fields marked below.', 'needtome-ai-chat'), 'failed' => __('Not saved: kra.name answered with an error. Try again a bit later.', 'needtome-ai-chat'),
+          'reload' => __('Reload the page', 'needtome-ai-chat'),
+          'testing' => __('Sending a test message…', 'needtome-ai-chat'), 'noChannels' => __('Delivery is off or no channel is saved yet.', 'needtome-ai-chat'),
+          'translating' => __('Translating…', 'needtome-ai-chat'), 'translated' => __('The empty fields are filled with the translation. Check them and press «Save settings».', 'needtome-ai-chat'),
+          'nothingToTranslate' => __('Nothing to translate: the fields of the other languages are filled already.', 'needtome-ai-chat'),
       ]); ?>;
       var updated = root.getAttribute('data-updated'), status = root.querySelector('[data-cs="status"]');
       var notice = root.querySelector('[data-cs="notice"]');
@@ -350,7 +350,7 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
     });
     // One button saves everything: «Save settings» first sends what changed in these blocks to kra.name, then the
     // plugin's own settings; an error at kra.name stops the submit and is shown at its block.
-    window.aiwcSaveFailed = <?php echo wp_json_encode(__('Not saved: kra.name did not accept the changes of a block above (see its message).', 'aiworker-chat')); ?>;
+    window.aiwcSaveFailed = <?php echo wp_json_encode(__('Not saved: kra.name did not accept the changes of a block above (see its message).', 'needtome-ai-chat')); ?>;
     if (!window.aiwcSaveHooked) {
       window.aiwcSaveHooked = true;
       document.addEventListener('submit', function (e) {

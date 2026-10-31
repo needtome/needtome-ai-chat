@@ -13,41 +13,41 @@ function aiworker_chat_channel_guides(): array {
     $meta = '<a href="https://developers.facebook.com/apps/" target="_blank" rel="noopener">developers.facebook.com</a>';
     // %1$s … %2$s around «Channels»: the link to the chat's «Channels» page at kra.name
     $panel = '<a href="'.esc_url(aiworker_chat_panel_chat_url('channels')).'" target="_blank" rel="noopener">';
-    $webhook = __('Fields of the Meta app that the «Channels» page shows: the callback URL and the verify token. Paste them in the app\'s Webhooks settings and subscribe to messages.', 'aiworker-chat');
+    $webhook = __('Fields of the Meta app that the «Channels» page shows: the callback URL and the verify token. Paste them in the app\'s Webhooks settings and subscribe to messages.', 'needtome-ai-chat');
     return [
-        'telegram' => ['Telegram', __('your own Telegram bot', 'aiworker-chat'), [
+        'telegram' => ['Telegram', __('your own Telegram bot', 'needtome-ai-chat'), [
             /* translators: 1: @BotFather link, 2: the /newbot command */
-            sprintf(__('In Telegram open %1$s, send %2$s, choose the bot\'s name and username and copy the token it gives.', 'aiworker-chat'), $botfather, '<code>/newbot</code>'),
+            sprintf(__('In Telegram open %1$s, send %2$s, choose the bot\'s name and username and copy the token it gives.', 'needtome-ai-chat'), $botfather, '<code>/newbot</code>'),
             /* translators: 1: opening link tag, 2: closing link tag */
-            sprintf(__('In %1$s«Channels»%2$s of the chat choose Telegram, paste the token and press «Connect». The webhook is set by itself.', 'aiworker-chat'), $panel, '</a>'),
-            __('Write to your bot to check that the consultant answers.', 'aiworker-chat'),
+            sprintf(__('In %1$s«Channels»%2$s of the chat choose Telegram, paste the token and press «Connect». The webhook is set by itself.', 'needtome-ai-chat'), $panel, '</a>'),
+            __('Write to your bot to check that the consultant answers.', 'needtome-ai-chat'),
         ], ''],
-        'messenger' => ['Facebook Messenger', __('a Facebook page and a Meta app with Messenger', 'aiworker-chat'), [
+        'messenger' => ['Facebook Messenger', __('a Facebook page and a Meta app with Messenger', 'needtome-ai-chat'), [
             /* translators: %s: link to developers.facebook.com */
-            sprintf(__('At %s create an app with the Messenger product and connect your Facebook page to it.', 'aiworker-chat'), $meta),
+            sprintf(__('At %s create an app with the Messenger product and connect your Facebook page to it.', 'needtome-ai-chat'), $meta),
             /* translators: 1: opening link tag, 2: closing link tag */
-            sprintf(__('In %1$s«Channels»%2$s of the chat choose Messenger and enter the page ID, the page access token and the app secret.', 'aiworker-chat'), $panel, '</a>'),
+            sprintf(__('In %1$s«Channels»%2$s of the chat choose Messenger and enter the page ID, the page access token and the app secret.', 'needtome-ai-chat'), $panel, '</a>'),
             $webhook,
-        ], __('Meta lets a page answer only within 24 hours after the visitor\'s last message.', 'aiworker-chat')],
-        'instagram' => ['Instagram Direct', __('a professional Instagram account linked to a Facebook page', 'aiworker-chat'), [
+        ], __('Meta lets a page answer only within 24 hours after the visitor\'s last message.', 'needtome-ai-chat')],
+        'instagram' => ['Instagram Direct', __('a professional Instagram account linked to a Facebook page', 'needtome-ai-chat'), [
             /* translators: %s: link to developers.facebook.com */
-            sprintf(__('At %s create an app with Instagram messaging and connect the Facebook page your Instagram account is linked to.', 'aiworker-chat'), $meta),
+            sprintf(__('At %s create an app with Instagram messaging and connect the Facebook page your Instagram account is linked to.', 'needtome-ai-chat'), $meta),
             /* translators: 1: opening link tag, 2: closing link tag */
-            sprintf(__('In %1$s«Channels»%2$s of the chat choose Instagram and enter the page ID, the Instagram account ID, the access token and the app secret.', 'aiworker-chat'), $panel, '</a>'),
+            sprintf(__('In %1$s«Channels»%2$s of the chat choose Instagram and enter the page ID, the Instagram account ID, the access token and the app secret.', 'needtome-ai-chat'), $panel, '</a>'),
             $webhook,
         ], ''],
-        'whatsapp' => ['WhatsApp Business', __('a number in the WhatsApp Business Cloud API', 'aiworker-chat'), [
+        'whatsapp' => ['WhatsApp Business', __('a number in the WhatsApp Business Cloud API', 'needtome-ai-chat'), [
             /* translators: %s: link to developers.facebook.com */
-            sprintf(__('At %s create an app with WhatsApp, add your business number and create a permanent access token (a system user).', 'aiworker-chat'), $meta),
+            sprintf(__('At %s create an app with WhatsApp, add your business number and create a permanent access token (a system user).', 'needtome-ai-chat'), $meta),
             /* translators: 1: opening link tag, 2: closing link tag */
-            sprintf(__('In %1$s«Channels»%2$s of the chat choose WhatsApp and enter the phone number ID, the access token and the app secret.', 'aiworker-chat'), $panel, '</a>'),
+            sprintf(__('In %1$s«Channels»%2$s of the chat choose WhatsApp and enter the phone number ID, the access token and the app secret.', 'needtome-ai-chat'), $panel, '</a>'),
             $webhook,
-        ], __('Meta counts WhatsApp conversations; the «Channels» page shows how many are used.', 'aiworker-chat')],
-        'vk' => ['VK', __('a VK community with messages turned on', 'aiworker-chat'), [
-            __('In the community open «Manage → API usage» and create an access key with access to messages.', 'aiworker-chat'),
+        ], __('Meta counts WhatsApp conversations; the «Channels» page shows how many are used.', 'needtome-ai-chat')],
+        'vk' => ['VK', __('a VK community with messages turned on', 'needtome-ai-chat'), [
+            __('In the community open «Manage → API usage» and create an access key with access to messages.', 'needtome-ai-chat'),
             /* translators: 1: opening link tag, 2: closing link tag */
-            sprintf(__('In %1$s«Channels»%2$s of the chat choose VK and enter the community ID and the access key.', 'aiworker-chat'), $panel, '</a>'),
-            __('Copy the callback URL, the confirmation code and the secret key from «Channels» into the community\'s Callback API settings and turn on the «Incoming message» event.', 'aiworker-chat'),
+            sprintf(__('In %1$s«Channels»%2$s of the chat choose VK and enter the community ID and the access key.', 'needtome-ai-chat'), $panel, '</a>'),
+            __('Copy the callback URL, the confirmation code and the secret key from «Channels» into the community\'s Callback API settings and turn on the «Incoming message» event.', 'needtome-ai-chat'),
         ], ''],
     ];
 }
@@ -79,11 +79,11 @@ function aiworker_chat_channels_block(): void {
     $guides = aiworker_chat_channel_guides();
     $states = aiworker_chat_channel_states();
     $allowed = ['a' => ['href' => [], 'target' => [], 'rel' => []], 'code' => []];
-    $labels = ['connected' => __('connected', 'aiworker-chat'), 'not_connected' => __('not connected', 'aiworker-chat'), 'error' => __('needs attention', 'aiworker-chat')];
+    $labels = ['connected' => __('connected', 'needtome-ai-chat'), 'not_connected' => __('not connected', 'needtome-ai-chat'), 'error' => __('needs attention', 'needtome-ai-chat')];
     ?>
     <div class="aiwc-channels">
-      <h3><?php esc_html_e('Your online chat can be connected not only to the site', 'aiworker-chat'); ?></h3>
-      <p class="description"><?php esc_html_e('The same consultant answers in messengers too: with the same knowledge base, and the leads arrive the same way as from the site. Available on every plan with online chats, the free one too.', 'aiworker-chat'); ?></p>
+      <h3><?php esc_html_e('Your online chat can be connected not only to the site', 'needtome-ai-chat'); ?></h3>
+      <p class="description"><?php esc_html_e('The same consultant answers in messengers too: with the same knowledge base, and the leads arrive the same way as from the site. Available on every plan with online chats, the free one too.', 'needtome-ai-chat'); ?></p>
       <div class="aiwc-channels__tabs" role="tablist">
         <?php $first = true; foreach ($guides as $type => $g) : $state = $states[$type] ?? ''; ?>
           <button type="button" role="tab" class="aiwc-channels__tab<?php echo $first ? ' is-active' : ''; ?>" aria-selected="<?php echo $first ? 'true' : 'false'; ?>" aria-controls="aiwc-channel-<?php echo esc_attr($type); ?>"><?php echo esc_html($g[0]); ?><?php
@@ -95,7 +95,7 @@ function aiworker_chat_channels_block(): void {
         <div class="aiwc-channels__panel" id="aiwc-channel-<?php echo esc_attr($type); ?>" role="tabpanel"<?php echo $first ? '' : ' hidden'; ?>>
           <p><b><?php
             /* translators: %s: what the channel needs, e.g. «your own Telegram bot» */
-            echo esc_html(sprintf(__('You need: %s.', 'aiworker-chat'), $g[1])); ?></b><?php if ($state === 'connected' || $state === 'error') : ?> <span class="aiwc-pill aiwc-pill--<?php echo $state === 'connected' ? 'ok' : ($state === 'error' ? 'err' : 'off'); ?>"><?php echo esc_html($labels[$state]); ?></span><?php endif; ?></p>
+            echo esc_html(sprintf(__('You need: %s.', 'needtome-ai-chat'), $g[1])); ?></b><?php if ($state === 'connected' || $state === 'error') : ?> <span class="aiwc-pill aiwc-pill--<?php echo $state === 'connected' ? 'ok' : ($state === 'error' ? 'err' : 'off'); ?>"><?php echo esc_html($labels[$state]); ?></span><?php endif; ?></p>
           <ol class="aiwc-steps">
             <?php foreach ($g[2] as $step) : ?><li><?php echo wp_kses($step, $allowed); ?></li><?php endforeach; ?>
           </ol>

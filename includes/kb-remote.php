@@ -41,7 +41,7 @@ function aiworker_chat_kb_remote_ajax(): void {
         default:
             wp_send_json(['code' => 400, 'body' => []], 400);
     }
-    wp_send_json(['code' => $r['code'], 'body' => $r['body'], 'error' => $r['error'] !== '' ? __('kra.name cannot be reached from this site.', 'aiworker-chat') : '']);
+    wp_send_json(['code' => $r['code'], 'body' => $r['body'], 'error' => $r['error'] !== '' ? __('kra.name cannot be reached from this site.', 'needtome-ai-chat') : '']);
 }
 add_action('wp_ajax_aiwc_kb_remote', 'aiworker_chat_kb_remote_ajax');
 
@@ -58,14 +58,14 @@ function aiworker_chat_kb_remote_block(): void {
     $can = (array) ($data['can_add'] ?? []);
     $limits = (array) ($can['limits'] ?? []);
     $panel = preg_match('#^https://kra\.name/#', (string) ($data['panel_url'] ?? '')) ? (string) $data['panel_url'] : 'https://kra.name/app/panel';
-    $types = array_filter(['site' => __('Site', 'aiworker-chat'), 'page' => __('Page', 'aiworker-chat'), 'gdoc' => __('Google Doc', 'aiworker-chat'), 'text' => __('Text', 'aiworker-chat')], static function ($k) use ($can) { return ! empty($can[$k]); }, ARRAY_FILTER_USE_KEY);
+    $types = array_filter(['site' => __('Site', 'needtome-ai-chat'), 'page' => __('Page', 'needtome-ai-chat'), 'gdoc' => __('Google Doc', 'needtome-ai-chat'), 'text' => __('Text', 'needtome-ai-chat')], static function ($k) use ($can) { return ! empty($can[$k]); }, ARRAY_FILTER_USE_KEY);
     $date = static function (string $iso): string { $t = strtotime($iso); return $t ? wp_date(get_option('date_format').' H:i', $t) : ''; };
     ?>
     <section class="aiwc-card aiwc-kbr" id="aiwc-kbr">
-      <h2><?php esc_html_e('Knowledge base at kra.name', 'aiworker-chat'); ?></h2>
+      <h2><?php esc_html_e('Knowledge base at kra.name', 'needtome-ai-chat'); ?></h2>
       <p class="aiwc-lead"><?php echo esc_html(sprintf(
           /* translators: 1: consultant name, 2: note from kra.name, e.g. «Sources for this persona are shared by all of its chats» */
-          __('The consultant %1$s answers from these sources. %2$s.', 'aiworker-chat'), (string) ($data['persona']['name'] ?? ''), rtrim((string) ($data['note'] ?? ''), '.'))); ?></p>
+          __('The consultant %1$s answers from these sources. %2$s.', 'needtome-ai-chat'), (string) ($data['persona']['name'] ?? ''), rtrim((string) ($data['note'] ?? ''), '.'))); ?></p>
       <div class="aiwc-kbr__notice notice inline" data-kbr="notice" hidden><p></p></div>
 
       <ul class="aiwc-kbr__list">
@@ -82,45 +82,46 @@ function aiworker_chat_kb_remote_block(): void {
             <span class="aiwc-pill aiwc-pill--<?php echo esc_attr($tone); ?>"><?php echo esc_html((string) ($s['status_label'] ?? $status)); ?></span>
             <span class="aiwc-kbr__date"><?php echo esc_html($date((string) ($s['updated_at'] ?? ''))); ?></span>
             <span class="aiwc-kbr__actions">
-              <?php if (in_array($s['type'] ?? '', ['site', 'page', 'gdoc', 'gsheet'], true)) : ?><button type="button" class="button-link" data-kbr-op="source_refresh" data-id="<?php echo esc_attr((string) (int) $s['id']); ?>"><?php esc_html_e('Refresh', 'aiworker-chat'); ?></button><?php endif; ?>
-              <?php if (($s['type'] ?? '') !== 'faq') : ?><button type="button" class="button-link aiwc-kbr__del" data-kbr-op="source_delete" data-id="<?php echo esc_attr((string) (int) $s['id']); ?>" data-confirm="<?php echo esc_attr(sprintf(/* translators: %s: source name */ __('Delete «%s» from the knowledge base? Its text is removed for every chat of this consultant.', 'aiworker-chat'), $show)); ?>"><?php esc_html_e('Delete', 'aiworker-chat'); ?></button><?php endif; ?>
+              <?php if (in_array($s['type'] ?? '', ['site', 'page', 'gdoc', 'gsheet'], true)) : ?><button type="button" class="button-link" data-kbr-op="source_refresh" data-id="<?php echo esc_attr((string) (int) $s['id']); ?>"><?php esc_html_e('Refresh', 'needtome-ai-chat'); ?></button><?php endif; ?>
+              <?php if (($s['type'] ?? '') !== 'faq') : ?><button type="button" class="button-link aiwc-kbr__del" data-kbr-op="source_delete" data-id="<?php echo esc_attr((string) (int) $s['id']); ?>" data-confirm="<?php echo esc_attr(sprintf(/* translators: %s: source name */ __('Delete «%s» from the knowledge base? Its text is removed for every chat of this consultant.', 'needtome-ai-chat'), $show)); ?>"><?php esc_html_e('Delete', 'needtome-ai-chat'); ?></button><?php endif; ?>
             </span>
           </li>
         <?php endforeach; ?>
       </ul>
+      <?php $refreshHours = (int) ($limits['manual_refresh_hours'] ?? 6); $sitePages = (int) ($limits['site_pages'] ?? 20); // a plain variable: make-pot skips _n() whose count is a cast of a «??» expression ?>
       <?php if (isset($limits['manual_refreshes_left_today'])) : ?><p class="description"><?php echo esc_html(sprintf(
           /* translators: 1: refreshes left today, 2: hours between refreshes of one source */
-          __('Manual refreshes left today: %1$d. One source can be refreshed once every %2$d hours.', 'aiworker-chat'), (int) $limits['manual_refreshes_left_today'], (int) ($limits['manual_refresh_hours'] ?? 6))); ?></p><?php endif; ?>
+          _n('Manual refreshes left today: %1$d. One source can be refreshed once every %2$d hour.', 'Manual refreshes left today: %1$d. One source can be refreshed once every %2$d hours.', $refreshHours, 'needtome-ai-chat'), (int) $limits['manual_refreshes_left_today'], $refreshHours)); ?></p><?php endif; ?>
 
       <?php if ($types) : ?>
-      <h3><?php esc_html_e('Add a source', 'aiworker-chat'); ?></h3>
+      <h3><?php esc_html_e('Add a source', 'needtome-ai-chat'); ?></h3>
       <div class="aiwc-kbr__add" data-kbr="add">
         <select data-kbr-field="type"><?php foreach ($types as $k => $label) : ?><option value="<?php echo esc_attr($k); ?>"><?php echo esc_html($label); ?></option><?php endforeach; ?></select>
         <input type="url" class="regular-text" data-kbr-field="url" maxlength="<?php echo esc_attr((string) (int) ($limits['url_chars'] ?? 500)); ?>" placeholder="https://">
-        <textarea data-kbr-field="text" rows="4" maxlength="<?php echo esc_attr((string) (int) ($limits['text_chars'] ?? 50000)); ?>" placeholder="<?php esc_attr_e('The text the consultant should know', 'aiworker-chat'); ?>" hidden></textarea>
-        <input type="text" class="regular-text" data-kbr-field="title" maxlength="<?php echo esc_attr((string) (int) ($limits['title_chars'] ?? 120)); ?>" placeholder="<?php esc_attr_e('Title (optional)', 'aiworker-chat'); ?>">
-        <button type="button" class="button button-primary" data-kbr-op="source_add"><?php esc_html_e('Add', 'aiworker-chat'); ?></button>
+        <textarea data-kbr-field="text" rows="4" maxlength="<?php echo esc_attr((string) (int) ($limits['text_chars'] ?? 50000)); ?>" placeholder="<?php esc_attr_e('The text the consultant should know', 'needtome-ai-chat'); ?>" hidden></textarea>
+        <input type="text" class="regular-text" data-kbr-field="title" maxlength="<?php echo esc_attr((string) (int) ($limits['title_chars'] ?? 120)); ?>" placeholder="<?php esc_attr_e('Title (optional)', 'needtome-ai-chat'); ?>">
+        <button type="button" class="button button-primary" data-kbr-op="source_add"><?php esc_html_e('Add', 'needtome-ai-chat'); ?></button>
         <?php /* translators: %d: how many pages of a site are read */ ?>
-        <p class="description" data-kbr-hint="site"><?php echo esc_html(sprintf(__('The site is read from this address: up to %d pages.', 'aiworker-chat'), (int) ($limits['site_pages'] ?? 20))); ?></p>
+        <p class="description" data-kbr-hint="site"><?php echo esc_html(sprintf(/* translators: %d: number of pages */ _n('The site is read from this address: up to %d page.', 'The site is read from this address: up to %d pages.', $sitePages, 'needtome-ai-chat'), $sitePages)); ?></p>
       </div>
       <?php endif; ?>
       <p class="description"><?php echo wp_kses(sprintf(
           /* translators: %s: link to the consultant's knowledge in the kra.name panel */
-          __('Files and Google Sheets are added in the %s.', 'aiworker-chat'),
-          '<a href="'.esc_url($panel).'" target="_blank" rel="noopener">'.esc_html__('kra.name panel', 'aiworker-chat').'</a>'), ['a' => ['href' => [], 'target' => [], 'rel' => []]]); ?></p>
+          __('Files and Google Sheets are added in the %s.', 'needtome-ai-chat'),
+          '<a href="'.esc_url($panel).'" target="_blank" rel="noopener">'.esc_html__('kra.name panel', 'needtome-ai-chat').'</a>'), ['a' => ['href' => [], 'target' => [], 'rel' => []]]); ?></p>
 
       <?php if ($items !== null) : ?>
-      <h3><?php esc_html_e('Questions and answers', 'aiworker-chat'); ?></h3>
-      <p class="description"><?php esc_html_e('Exact answers to frequent questions: the consultant uses them as they are.', 'aiworker-chat'); ?></p>
+      <h3><?php esc_html_e('Questions and answers', 'needtome-ai-chat'); ?></h3>
+      <p class="description"><?php esc_html_e('Exact answers to frequent questions: the consultant uses them as they are.', 'needtome-ai-chat'); ?></p>
       <div class="aiwc-kbr__faq">
         <?php foreach (array_merge($items, [['id' => '', 'question' => '', 'answer' => '']]) as $it) : $new = (string) $it['id'] === ''; ?>
           <div class="aiwc-kbr__qa<?php echo $new ? ' aiwc-kbr__qa--new' : ''; ?>" data-id="<?php echo esc_attr((string) $it['id']); ?>">
-            <?php if ($new) : ?><b><?php esc_html_e('New question', 'aiworker-chat'); ?></b><?php endif; ?>
-            <input type="text" data-kbr-field="question" value="<?php echo esc_attr((string) $it['question']); ?>" placeholder="<?php esc_attr_e('Question', 'aiworker-chat'); ?>">
-            <textarea data-kbr-field="answer" rows="2" placeholder="<?php esc_attr_e('Answer', 'aiworker-chat'); ?>"><?php echo esc_textarea((string) $it['answer']); ?></textarea>
+            <?php if ($new) : ?><b><?php esc_html_e('New question', 'needtome-ai-chat'); ?></b><?php endif; ?>
+            <input type="text" data-kbr-field="question" value="<?php echo esc_attr((string) $it['question']); ?>" placeholder="<?php esc_attr_e('Question', 'needtome-ai-chat'); ?>">
+            <textarea data-kbr-field="answer" rows="2" placeholder="<?php esc_attr_e('Answer', 'needtome-ai-chat'); ?>"><?php echo esc_textarea((string) $it['answer']); ?></textarea>
             <span class="aiwc-kbr__qa-actions">
-              <button type="button" class="button" data-kbr-op="faq_save"><?php echo esc_html($new ? __('Add', 'aiworker-chat') : __('Save', 'aiworker-chat')); ?></button>
-              <?php if (! $new) : ?><button type="button" class="button-link aiwc-kbr__del" data-kbr-op="faq_delete" data-confirm="<?php esc_attr_e('Delete this question and answer?', 'aiworker-chat'); ?>"><?php esc_html_e('Delete', 'aiworker-chat'); ?></button><?php endif; ?>
+              <button type="button" class="button" data-kbr-op="faq_save"><?php echo esc_html($new ? __('Add', 'needtome-ai-chat') : __('Save', 'needtome-ai-chat')); ?></button>
+              <?php if (! $new) : ?><button type="button" class="button-link aiwc-kbr__del" data-kbr-op="faq_delete" data-confirm="<?php esc_attr_e('Delete this question and answer?', 'needtome-ai-chat'); ?>"><?php esc_html_e('Delete', 'needtome-ai-chat'); ?></button><?php endif; ?>
             </span>
           </div>
         <?php endforeach; ?>
@@ -129,7 +130,7 @@ function aiworker_chat_kb_remote_block(): void {
     </section>
     <script>
     (function (root) {
-      var c = <?php echo wp_json_encode(['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_kb_remote'), 'saving' => __('Saving…', 'aiworker-chat'), 'done' => __('Done.', 'aiworker-chat'), 'failed' => __('Not saved: kra.name answered with an error. Try again a bit later.', 'aiworker-chat'), 'lang' => aiworker_chat_wizard_lang()]); ?>;
+      var c = <?php echo wp_json_encode(['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_kb_remote'), 'saving' => __('Saving…', 'needtome-ai-chat'), 'done' => __('Done.', 'needtome-ai-chat'), 'failed' => __('Not saved: kra.name answered with an error. Try again a bit later.', 'needtome-ai-chat'), 'lang' => aiworker_chat_wizard_lang()]); ?>;
       var notice = root.querySelector('[data-kbr="notice"]'), add = root.querySelector('[data-kbr="add"]');
       function say(type, text) { notice.className = 'aiwc-kbr__notice notice inline notice-' + type; notice.hidden = !text; notice.firstChild.textContent = text || ''; }
       // the add form: a text source has a text field instead of an address

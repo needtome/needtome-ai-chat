@@ -23,7 +23,7 @@ function aiworker_chat_lazy_blocks(): array {
 function aiworker_chat_lazy(string $block, int $number = 0, bool $card = false): void {
     static $script = false;
     echo '<div class="aiwc-lazy'.($card ? ' aiwc-card' : '').'" data-aiwc-lazy="'.esc_attr($block).'" data-n="'.esc_attr((string) $number).'">'
-        .'<p class="aiwc-aw__loading"><i class="aiwc-aw__spin" aria-hidden="true"></i> '.esc_html__('Loading from kra.name…', 'aiworker-chat').'</p></div>';
+        .'<p class="aiwc-aw__loading"><i class="aiwc-aw__spin" aria-hidden="true"></i> '.esc_html__('Loading from kra.name…', 'needtome-ai-chat').'</p></div>';
     if ($script) return;
     $script = true;
     add_action('admin_footer', 'aiworker_chat_lazy_script');
@@ -77,7 +77,7 @@ function aiworker_chat_lazy_ajax(): void {
 add_action('wp_ajax_aiwc_lazy', 'aiworker_chat_lazy_ajax');
 
 function aiworker_chat_lazy_script(): void {
-    $data = ['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_lazy'), 'failed' => __('kra.name did not answer. Reload the page to try again.', 'aiworker-chat'), 'loading' => __('Loading from kra.name…', 'aiworker-chat'), 'lang' => aiworker_chat_wizard_lang()];
+    $data = ['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_lazy'), 'failed' => __('kra.name did not answer. Reload the page to try again.', 'needtome-ai-chat'), 'loading' => __('Loading from kra.name…', 'needtome-ai-chat'), 'lang' => aiworker_chat_wizard_lang()];
     ?>
     <script>
     (function (c) {

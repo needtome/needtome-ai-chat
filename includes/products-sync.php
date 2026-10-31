@@ -284,7 +284,7 @@ function aiworker_chat_products_step(array $kb, array $q, string $token): ?array
             foreach (array_keys($tooLarge) as $key) if (! isset($exported[explode('#', (string) $key)[0]])) unset($tooLarge[$key]);
             $note = '';
         } else {
-            $note = __('Products that are no longer on the site were not removed from kra.name this time, because some products were not accepted.', 'aiworker-chat');
+            $note = __('Products that are no longer on the site were not removed from kra.name this time, because some products were not accepted.', 'needtome-ai-chat');
         }
         $reconcile = 0; $clean = true;
     }
@@ -333,15 +333,15 @@ function aiworker_chat_products_remote_status(): ?array {
 /** The status line of the catalog row on the knowledge card. */
 function aiworker_chat_products_status_text(array $kb, array $state, int $queued): string {
     if (! aiworker_chat_products_on($kb)) return '';
-    $text = sprintf(/* translators: 1: products sent, 2: products removed */ __('Catalog: sent %1$d, removed %2$d.', 'aiworker-chat'), (int) ($state['p_sent'] ?? 0), (int) ($state['p_deleted'] ?? 0));
-    if ($queued) $text .= ' '.sprintf(/* translators: %d: products waiting */ _n('%d product is waiting to be sent.', '%d products are waiting to be sent.', $queued, 'aiworker-chat'), $queued);
+    $text = sprintf(/* translators: 1: products sent, 2: products removed */ __('Catalog: sent %1$d, removed %2$d.', 'needtome-ai-chat'), (int) ($state['p_sent'] ?? 0), (int) ($state['p_deleted'] ?? 0));
+    if ($queued) $text .= ' '.sprintf(/* translators: %d: products waiting */ _n('%d product is waiting to be sent.', '%d products are waiting to be sent.', $queued, 'needtome-ai-chat'), $queued);
     $rejected = (array) ($state['p_rejected'] ?? []);
-    if ($rejected) $text .= ' '.sprintf(/* translators: 1: number of products, 2: reasons */ __('Products not accepted by kra.name: %1$d (%2$s).', 'aiworker-chat'), count($rejected), implode(', ', array_unique(array_values($rejected))));
+    if ($rejected) $text .= ' '.sprintf(/* translators: 1: number of products, 2: reasons */ __('Products not accepted by kra.name: %1$d (%2$s).', 'needtome-ai-chat'), count($rejected), implode(', ', array_unique(array_values($rejected))));
     $tooLarge = array_map('strval', (array) ($state['p_too_large'] ?? []));
-    if ($tooLarge) $text .= ' '.sprintf(/* translators: 1: number of products and variations, 2: their ids */ __('Not updated because of their size: %1$d (%2$s); kra.name keeps their previous version.', 'aiworker-chat'), count($tooLarge), implode(', ', array_slice($tooLarge, 0, 20)).(count($tooLarge) > 20 ? ', …' : ''));
+    if ($tooLarge) $text .= ' '.sprintf(/* translators: 1: number of products and variations, 2: their ids */ __('Not updated because of their size: %1$d (%2$s); kra.name keeps their previous version.', 'needtome-ai-chat'), count($tooLarge), implode(', ', array_slice($tooLarge, 0, 20)).(count($tooLarge) > 20 ? ', …' : ''));
     if (! empty($state['p_note'])) $text .= ' '.$state['p_note'];
     $remote = aiworker_chat_products_remote_status();
-    if ($remote && ! empty($remote['ok'])) $text .= ' '.sprintf(/* translators: 1: products and variations, 2: characteristics */ __('In the chat\'s catalog: %1$d products and variations, %2$d characteristics.', 'aiworker-chat'), (int) ($remote['items'] ?? 0), (int) ($remote['attributes'] ?? 0));
+    if ($remote && ! empty($remote['ok'])) $text .= ' '.sprintf(/* translators: 1: products and variations, 2: characteristics */ __('In the chat\'s catalog: %1$d products and variations, %2$d characteristics.', 'needtome-ai-chat'), (int) ($remote['items'] ?? 0), (int) ($remote['attributes'] ?? 0));
     return $text;
 }
 

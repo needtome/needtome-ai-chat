@@ -131,7 +131,7 @@ function aiworker_chat_oauth_client_id(): string {
 
 /** «Connect AI Worker»: register if needed, remember the PKCE verifier under a random state, go to the consent page. */
 function aiworker_chat_oauth_start(): void {
-    if (! current_user_can('manage_options')) wp_die(esc_html__('You are not allowed to do this.', 'aiworker-chat'), 403);
+    if (! current_user_can('manage_options')) wp_die(esc_html__('You are not allowed to do this.', 'needtome-ai-chat'), 403);
     check_admin_referer('aiwc_oauth_connect');
     aiworker_chat_oauth_begin();
 }
@@ -236,14 +236,14 @@ function aiworker_chat_oauth_done(array $pending, string $notice): void {
     $host = (string) wp_parse_url(home_url('/'), PHP_URL_HOST);
     $text = $notice === 'connected'
         /* translators: %s: this site's domain */
-        ? sprintf(__('AI Worker is connected to %s. Go back to the NeedToMe AI Chat settings in the browser where you are signed in to the site: they update by themselves.', 'aiworker-chat'), $host)
-        : (aiworker_chat_assistant_notices()[$notice][1] ?? __('The connection was not completed. Start it again.', 'aiworker-chat'));
-    wp_die('<p>'.esc_html($text).'</p>', esc_html__('NeedToMe AI Chat', 'aiworker-chat'), ['response' => 200]);
+        ? sprintf(__('AI Worker is connected to %s. Go back to the NeedToMe AI Chat settings in the browser where you are signed in to the site: they update by themselves.', 'needtome-ai-chat'), $host)
+        : (aiworker_chat_assistant_notices()[$notice][1] ?? __('The connection was not completed. Start it again.', 'needtome-ai-chat'));
+    wp_die('<p>'.esc_html($text).'</p>', esc_html__('NeedToMe AI Chat', 'needtome-ai-chat'), ['response' => 200]);
 }
 
 /** «Disconnect»: revoke at kra.name, then forget the tokens here even if kra.name cannot be reached. */
 function aiworker_chat_oauth_disconnect(): void {
-    if (! current_user_can('manage_options')) wp_die(esc_html__('You are not allowed to do this.', 'aiworker-chat'), 403);
+    if (! current_user_can('manage_options')) wp_die(esc_html__('You are not allowed to do this.', 'needtome-ai-chat'), 403);
     check_admin_referer('aiwc_oauth_disconnect');
     aiworker_chat_oauth_revoke();
     wp_safe_redirect(aiworker_chat_settings_url('disconnected'));
@@ -433,7 +433,7 @@ function aiworker_chat_api(string $method, string $path, array $body = [], int $
 
     for ($attempt = 0; $attempt < 2; $attempt++) {
         $token = aiworker_chat_oauth_access_token($attempt > 0, $busy);
-        if ($token === null) return ['code' => 503, 'body' => ['message' => $busy === 'unreachable' ? __('AI Worker cannot be reached right now. The connection is kept; try again in a minute.', 'aiworker-chat') : __('The connection to AI Worker is being renewed. Try again in a few seconds.', 'aiworker-chat')], 'error' => ''];
+        if ($token === null) return ['code' => 503, 'body' => ['message' => $busy === 'unreachable' ? __('AI Worker cannot be reached right now. The connection is kept; try again in a minute.', 'needtome-ai-chat') : __('The connection to AI Worker is being renewed. Try again in a few seconds.', 'needtome-ai-chat')], 'error' => ''];
         if ($token === '') return ['code' => 401, 'body' => [], 'error' => 'not_connected'];
         $args = ['method' => $method, 'timeout' => $timeout, 'redirection' => 0, 'headers' => ['Authorization' => 'Bearer '.$token, 'Accept' => 'application/json']];
         $url = AIWORKER_CHAT_API.$path;

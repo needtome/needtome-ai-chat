@@ -15,7 +15,7 @@ The chat, its knowledge base and the leads live at [kra.name](https://kra.name/)
 - The knowledge base: posts, pages, WooCommerce products, ACF fields and widgets sent from the site, plus sources and questions and answers.
 - A setup wizard with voice input, usage limits and statistics.
 
-Install: copy this folder to `wp-content/plugins/aiworker-chat` (or upload it as a ZIP), activate the plugin and open **NeedToMe → AI Chat**. Details on data sent to kra.name are in [readme.txt](readme.txt) under «External services».
+Install: copy this folder to `wp-content/plugins/needtome-ai-chat` (or upload it as a ZIP), activate the plugin and open **NeedToMe → AI Chat**. Details on data sent to kra.name are in [readme.txt](readme.txt) under «External services».
 
 ## Screenshots
 

@@ -11,7 +11,7 @@ if (! defined('ABSPATH')) exit;
 
 /** AJAX: one entry point, a fixed list of operations mapped to the plugin API. */
 function aiworker_chat_assistant_ajax(): void {
-    if (! current_user_can('manage_options')) wp_send_json(['code' => 403, 'body' => ['message' => __('You are not allowed to do this.', 'aiworker-chat')]], 403);
+    if (! current_user_can('manage_options')) wp_send_json(['code' => 403, 'body' => ['message' => __('You are not allowed to do this.', 'needtome-ai-chat')]], 403);
     check_ajax_referer('aiwc_assistant', 'nonce');
     $op = isset($_POST['op']) ? sanitize_key(wp_unslash((string) $_POST['op'])) : '';
     $chat = isset($_POST['chat_id']) ? absint(wp_unslash((string) $_POST['chat_id'])) : 0;
@@ -32,7 +32,7 @@ function aiworker_chat_assistant_ajax(): void {
         case 'ask':
             $text = isset($_POST['text']) ? sanitize_textarea_field(wp_unslash((string) $_POST['text'])) : '';
             $text = function_exists('mb_substr') ? mb_substr($text, 0, 4000) : substr($text, 0, 4000);
-            if (trim($text) === '') wp_send_json(['code' => 422, 'body' => ['message' => __('Write what you want to set up.', 'aiworker-chat')]]);
+            if (trim($text) === '') wp_send_json(['code' => 422, 'body' => ['message' => __('Write what you want to set up.', 'needtome-ai-chat')]]);
             $result = aiworker_chat_api('POST', '/plugin/assistant/ask?lang='.$lang, ['text' => $text] + $chatArg, 60);
             break;
         case 'apply':
@@ -61,7 +61,7 @@ function aiworker_chat_assistant_ajax(): void {
     }
     if ($result['code'] === 401) $result['body']['connected'] = aiworker_chat_is_connected();
     // The status goes in the JSON body: admin-ajax answers 200 so the script can show the reason itself.
-    wp_send_json(['code' => $result['code'], 'body' => $result['body'], 'error' => $result['error'] !== '' ? __('kra.name cannot be reached from this site.', 'aiworker-chat') : '']);
+    wp_send_json(['code' => $result['code'], 'body' => $result['body'], 'error' => $result['error'] !== '' ? __('kra.name cannot be reached from this site.', 'needtome-ai-chat') : '']);
 }
 add_action('wp_ajax_aiwc_assistant', 'aiworker_chat_assistant_ajax');
 
@@ -85,7 +85,7 @@ function aiworker_chat_assistant_enqueue(string $hook): void {
     if ($tab !== 'assistant' && ! (in_array($tab, ['', 'settings', 'kb'], true) && aiworker_chat_options()['key'] !== '')) return;
     // the file's time in the version too: a browser keeps a cached script for the same version, also between releases
     $file = dirname(__DIR__).'/admin-assistant.js';
-    wp_enqueue_script('aiworker-chat-assistant', plugins_url('admin-assistant.js', dirname(__DIR__).'/aiworker-chat.php'), [], AIWORKER_CHAT_VERSION.'.'.(int) @filemtime($file), true);
+    wp_enqueue_script('aiworker-chat-assistant', plugins_url('admin-assistant.js', dirname(__DIR__).'/needtome-ai-chat.php'), [], AIWORKER_CHAT_VERSION.'.'.(int) @filemtime($file), true);
     wp_add_inline_script('aiworker-chat-assistant', 'window.aiwcAssistant = '.wp_json_encode([
         'ajax' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('aiwc_assistant'),
@@ -93,49 +93,49 @@ function aiworker_chat_assistant_enqueue(string $hook): void {
         'chatId' => (string) (int) get_option(AIWORKER_CHAT_LINKED_OPTION, 0),
         'lang' => aiworker_chat_wizard_lang(),
         't' => [
-            'you' => __('You', 'aiworker-chat'),
-            'assistant' => __('Wizard', 'aiworker-chat'),
-            'send' => __('Send', 'aiworker-chat'),
-            'sending' => __('The wizard is thinking…', 'aiworker-chat'),
-            'pending' => __('Proposed changes', 'aiworker-chat'),
-            'apply' => __('Apply', 'aiworker-chat'),
-            'discard' => __('Cancel', 'aiworker-chat'),
-            'clear' => __('Start a new conversation', 'aiworker-chat'),
-            'clearConfirm' => __('Clear the conversation with the wizard?', 'aiworker-chat'),
-            'mic' => __('Dictate', 'aiworker-chat'),
-            'micStop' => __('Stop and recognize', 'aiworker-chat'),
-            'micPrep' => __('Getting the microphone ready…', 'aiworker-chat'),
-            'micSpeak' => __('Speak. Press again to recognize the speech.', 'aiworker-chat'),
-            'micBusy' => __('Recognizing the speech…', 'aiworker-chat'),
-            'micShort' => __('The recording is too short.', 'aiworker-chat'),
-            'micDenied' => __('Allow access to the microphone.', 'aiworker-chat'),
-            'micFailed' => __('The speech could not be recognized.', 'aiworker-chat'),
-            'micNone' => __('Voice input is not available in this browser.', 'aiworker-chat'),
-            'micSafari' => __('So that Safari stops asking about the microphone every time: Safari Settings → Websites → Microphone → this site → «Allow».', 'aiworker-chat'),
-            'placeholder' => __('For example: create a chat for this site, add the delivery page to the knowledge base and write a greeting', 'aiworker-chat'),
-            'e401' => __('The connection to AI Worker has ended. Connect again.', 'aiworker-chat'),
-            'e403' => __('This is not available with the access the site has. Open the kra.name panel for it.', 'aiworker-chat'),
-            'e403plan' => __('The account\'s plan no longer includes the online chat, so the wizard and the statistics are not available.', 'aiworker-chat'),
-            'e404' => __('This chat is not in the connected account.', 'aiworker-chat'),
+            'you' => __('You', 'needtome-ai-chat'),
+            'assistant' => __('Wizard', 'needtome-ai-chat'),
+            'send' => __('Send', 'needtome-ai-chat'),
+            'sending' => __('The wizard is thinking…', 'needtome-ai-chat'),
+            'pending' => __('Proposed changes', 'needtome-ai-chat'),
+            'apply' => __('Apply', 'needtome-ai-chat'),
+            'discard' => __('Cancel', 'needtome-ai-chat'),
+            'clear' => __('Start a new conversation', 'needtome-ai-chat'),
+            'clearConfirm' => __('Clear the conversation with the wizard?', 'needtome-ai-chat'),
+            'mic' => __('Dictate', 'needtome-ai-chat'),
+            'micStop' => __('Stop and recognize', 'needtome-ai-chat'),
+            'micPrep' => __('Getting the microphone ready…', 'needtome-ai-chat'),
+            'micSpeak' => __('Speak. Press again to recognize the speech.', 'needtome-ai-chat'),
+            'micBusy' => __('Recognizing the speech…', 'needtome-ai-chat'),
+            'micShort' => __('The recording is too short.', 'needtome-ai-chat'),
+            'micDenied' => __('Allow access to the microphone.', 'needtome-ai-chat'),
+            'micFailed' => __('The speech could not be recognized.', 'needtome-ai-chat'),
+            'micNone' => __('Voice input is not available in this browser.', 'needtome-ai-chat'),
+            'micSafari' => __('So that Safari stops asking about the microphone every time: Safari Settings → Websites → Microphone → this site → «Allow».', 'needtome-ai-chat'),
+            'placeholder' => __('For example: create a chat for this site, add the delivery page to the knowledge base and write a greeting', 'needtome-ai-chat'),
+            'e401' => __('The connection to AI Worker has ended. Connect again.', 'needtome-ai-chat'),
+            'e403' => __('This is not available with the access the site has. Open the kra.name panel for it.', 'needtome-ai-chat'),
+            'e403plan' => __('The account\'s plan no longer includes the online chat, so the wizard and the statistics are not available.', 'needtome-ai-chat'),
+            'e404' => __('This chat is not in the connected account.', 'needtome-ai-chat'),
             /* translators: %s: seconds to wait */
-            'e429' => __('Too many requests or the AI tokens are used up. Try again in %s s.', 'aiworker-chat'),
-            'e5xx' => __('kra.name answered with an error. Try again a bit later.', 'aiworker-chat'),
-            'e0' => __('kra.name cannot be reached from this site.', 'aiworker-chat'),
-            'tokens' => __('AI tokens', 'aiworker-chat'),
-            'loading' => __('Loading from kra.name…', 'aiworker-chat'),
-            'of' => __('of', 'aiworker-chat'),
-            'noLimit' => __('no limit', 'aiworker-chat'),
-            'byDay' => __('By day', 'aiworker-chat'),
-            'day' => __('Day', 'aiworker-chat'),
-            'empty' => __('No dialogs in this period.', 'aiworker-chat'),
+            'e429' => __('Too many requests or the AI tokens are used up. Try again in %s s.', 'needtome-ai-chat'),
+            'e5xx' => __('kra.name answered with an error. Try again a bit later.', 'needtome-ai-chat'),
+            'e0' => __('kra.name cannot be reached from this site.', 'needtome-ai-chat'),
+            'tokens' => __('AI tokens', 'needtome-ai-chat'),
+            'loading' => __('Loading from kra.name…', 'needtome-ai-chat'),
+            'of' => __('of', 'needtome-ai-chat'),
+            'noLimit' => __('no limit', 'needtome-ai-chat'),
+            'byDay' => __('By day', 'needtome-ai-chat'),
+            'day' => __('Day', 'needtome-ai-chat'),
+            'empty' => __('No dialogs in this period.', 'needtome-ai-chat'),
             'cols' => [
-                'sessions' => __('Dialogs', 'aiworker-chat'),
-                'messages_in' => __('Visitor messages', 'aiworker-chat'),
-                'answers' => __('Answers', 'aiworker-chat'),
-                'leads' => __('Leads', 'aiworker-chat'),
-                'rated_high' => __('Rated 4–5', 'aiworker-chat'),
-                'rated_low' => __('Rated 1–3', 'aiworker-chat'),
-                'voice' => __('Voice input', 'aiworker-chat'),
+                'sessions' => __('Dialogs', 'needtome-ai-chat'),
+                'messages_in' => __('Visitor messages', 'needtome-ai-chat'),
+                'answers' => __('Answers', 'needtome-ai-chat'),
+                'leads' => __('Leads', 'needtome-ai-chat'),
+                'rated_high' => __('Rated 4–5', 'needtome-ai-chat'),
+                'rated_low' => __('Rated 1–3', 'needtome-ai-chat'),
+                'voice' => __('Voice input', 'needtome-ai-chat'),
             ],
         ],
     ]).';', 'before');
@@ -145,18 +145,18 @@ add_action('admin_enqueue_scripts', 'aiworker_chat_assistant_enqueue');
 /** Notices after the OAuth round trip and the chat choice: code => [type, text]. */
 function aiworker_chat_assistant_notices(): array {
     return [
-        'connected' => ['success', __('AI Worker is connected. Once a chat is connected, the setup wizard is in step 1.', 'aiworker-chat')],
-        'disconnected' => ['success', __('AI Worker is disconnected: the access was revoked and removed from this site. The chat on the site keeps working.', 'aiworker-chat')],
-        'denied' => ['warning', __('Access was not allowed at kra.name, nothing changed.', 'aiworker-chat')],
-        'state' => ['error', __('The connection link is outdated or was opened by another user. Start the connection again.', 'aiworker-chat')],
-        'register_failed' => ['error', __('kra.name did not register this site. Check that the site can reach kra.name and try again.', 'aiworker-chat')],
-        'failed' => ['error', __('The connection was not completed. Start it again.', 'aiworker-chat')],
-        'linked' => ['success', __('The chat is connected: its key is saved and this site is in its allowed sites. Turn on «Show the chat on this site» below. The setup wizard is in step 1 below.', 'aiworker-chat')],
-        'link_unsupported' => ['warning', __('kra.name cannot connect a chat automatically yet. Copy the public key wk_… from the chat\'s card and paste it above.', 'aiworker-chat')],
-        'link_domains' => ['error', __('This chat already has the maximum of 20 allowed sites. Remove one in the chat\'s settings at kra.name, then connect again.', 'aiworker-chat')],
-        'link_expired' => ['error', __('This sign-in link is outdated or was already used. Open the NeedToMe AI Chat settings and copy the link again.', 'aiworker-chat')],
-        'tg_failed' => ['error', __('kra.name did not give a Telegram link. Try again, or connect the bot in the kra.name panel.', 'aiworker-chat')],
-        'link_failed' => ['error', __('kra.name did not connect this chat. Try again, or copy the public key wk_… from the chat\'s card.', 'aiworker-chat')],
+        'connected' => ['success', __('AI Worker is connected. Once a chat is connected, the setup wizard is in step 1.', 'needtome-ai-chat')],
+        'disconnected' => ['success', __('AI Worker is disconnected: the access was revoked and removed from this site. The chat on the site keeps working.', 'needtome-ai-chat')],
+        'denied' => ['warning', __('Access was not allowed at kra.name, nothing changed.', 'needtome-ai-chat')],
+        'state' => ['error', __('The connection link is outdated or was opened by another user. Start the connection again.', 'needtome-ai-chat')],
+        'register_failed' => ['error', __('kra.name did not register this site. Check that the site can reach kra.name and try again.', 'needtome-ai-chat')],
+        'failed' => ['error', __('The connection was not completed. Start it again.', 'needtome-ai-chat')],
+        'linked' => ['success', __('The chat is connected: its key is saved and this site is in its allowed sites. Turn on «Show the chat on this site» below. The setup wizard is in step 1 below.', 'needtome-ai-chat')],
+        'link_unsupported' => ['warning', __('kra.name cannot connect a chat automatically yet. Copy the public key wk_… from the chat\'s card and paste it above.', 'needtome-ai-chat')],
+        'link_domains' => ['error', __('This chat already has the maximum of 20 allowed sites. Remove one in the chat\'s settings at kra.name, then connect again.', 'needtome-ai-chat')],
+        'link_expired' => ['error', __('This sign-in link is outdated or was already used. Open the NeedToMe AI Chat settings and copy the link again.', 'needtome-ai-chat')],
+        'tg_failed' => ['error', __('kra.name did not give a Telegram link. Try again, or connect the bot in the kra.name panel.', 'needtome-ai-chat')],
+        'link_failed' => ['error', __('kra.name did not connect this chat. Try again, or copy the public key wk_… from the chat\'s card.', 'needtome-ai-chat')],
     ];
 }
 
@@ -172,7 +172,7 @@ function aiworker_chat_assistant_notice(): void {
 function aiworker_chat_assistant_bar(): void {
     ?>
       <div class="aiwc-aw__bar">
-        <span class="aiwc-pill aiwc-pill--ok"><?php esc_html_e('AI Worker connected', 'aiworker-chat'); ?></span>
+        <span class="aiwc-pill aiwc-pill--ok"><?php esc_html_e('AI Worker connected', 'needtome-ai-chat'); ?></span>
         <span class="aiwc-aw__account" data-aw="account"></span>
       </div>
     <?php
@@ -203,7 +203,7 @@ function aiworker_chat_usage_rows(): array {
     if (! $rows) {
         $me = aiworker_chat_api('GET', '/plugin/me', [], 10);
         $tok = $me['code'] === 200 ? ($me['body']['wizard']['tokens'] ?? null) : null;
-        if (is_array($tok)) $rows[] = ['key' => 'tokens', 'label' => (string) ($tok['label'] ?? __('AI tokens', 'aiworker-chat')), 'used' => $tok['used'] ?? 0, 'limit' => $tok['limit'] ?? 0, 'text' => (string) ($tok['text'] ?? '')];
+        if (is_array($tok)) $rows[] = ['key' => 'tokens', 'label' => (string) ($tok['label'] ?? __('AI tokens', 'needtome-ai-chat')), 'used' => $tok['used'] ?? 0, 'limit' => $tok['limit'] ?? 0, 'text' => (string) ($tok['text'] ?? '')];
     }
     $result = ['rows' => $rows, 'url' => $url];
     set_transient($cacheKey, $result, 5 * MINUTE_IN_SECONDS);
@@ -217,7 +217,7 @@ function aiworker_chat_usage_block(): void {
     $url = preg_match('#^https://kra\.name/#', $usage['url']) ? $usage['url'] : 'https://kra.name/app/panel/billing';
     ?>
     <div class="aiwc-usage">
-      <h2><?php esc_html_e('Usage and limits', 'aiworker-chat'); ?></h2>
+      <h2><?php esc_html_e('Usage and limits', 'needtome-ai-chat'); ?></h2>
       <?php foreach ($usage['rows'] as $r) :
           $used = (float) ($r['used'] ?? 0); $limit = (float) ($r['limit'] ?? 0);
           $pct = $limit > 0 ? (int) min(100, round(100 * $used / $limit)) : null;
@@ -230,7 +230,7 @@ function aiworker_chat_usage_block(): void {
           <?php if (! empty($r['cta']) && preg_match('#^https://kra\.name/#', (string) ($r['cta_url'] ?? ''))) : ?><p class="aiwc-meter__cta"><a class="button button-small" href="<?php echo esc_url((string) $r['cta_url']); ?>" target="_blank" rel="noopener"><?php echo esc_html((string) $r['cta']); ?></a></p><?php endif; ?>
         </div>
       <?php endforeach; ?>
-      <p class="description"><a href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener"><?php esc_html_e('Details at kra.name', 'aiworker-chat'); ?></a></p>
+      <p class="description"><a href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener"><?php esc_html_e('Details at kra.name', 'needtome-ai-chat'); ?></a></p>
     </div>
     <?php
 }
@@ -249,11 +249,11 @@ function aiworker_chat_payment_step(int $number): void {
     $plan = (string) ($account['plan_name'] ?? '');
     ?>
     <section class="aiwc-card aiwc-card--pay" id="aiwc-pay">
-      <h2><span class="aiwc-num"><?php echo esc_html((string) $number); ?></span><?php esc_html_e('Choose a plan', 'aiworker-chat'); ?></h2>
+      <h2><span class="aiwc-num"><?php echo esc_html((string) $number); ?></span><?php esc_html_e('Choose a plan', 'needtome-ai-chat'); ?></h2>
       <?php /* translators: %s: the account's current plan, e.g. «No plan» */ ?>
-      <?php if ($plan !== '') : ?><p class="aiwc-pay__plan"><b><?php echo esc_html(sprintf(__('Now: %s.', 'aiworker-chat'), $plan)); ?></b></p><?php endif; ?>
-      <p><?php esc_html_e('The chat works on the free AI tokens until they run out; then it stops answering visitors. A plan gives monthly AI tokens, a larger knowledge base and paid add-ons such as voice input.', 'aiworker-chat'); ?></p>
-      <p><a class="button button-primary button-large" href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener"><?php esc_html_e('Go to payment', 'aiworker-chat'); ?></a></p>
+      <?php if ($plan !== '') : ?><p class="aiwc-pay__plan"><b><?php echo esc_html(sprintf(__('Now: %s.', 'needtome-ai-chat'), $plan)); ?></b></p><?php endif; ?>
+      <p><?php esc_html_e('The chat works on the free AI tokens until they run out; then it stops answering visitors. A plan gives monthly AI tokens, a larger knowledge base and paid add-ons such as voice input.', 'needtome-ai-chat'); ?></p>
+      <p><a class="button button-primary button-large" href="<?php echo esc_url($url); ?>" target="_blank" rel="noopener"><?php esc_html_e('Go to payment', 'needtome-ai-chat'); ?></a></p>
     </section>
     <?php
 }
@@ -273,7 +273,7 @@ function aiworker_chat_assistant_forms(): void {
 /** $collapsed: only the tab row shows (everything is connected); a tab or the arrow opens the card. */
 function aiworker_chat_wizard_block(bool $collapsed = false): void {
     // the three ways to set the chat up from where you are: here, from your AI assistant (MCP), from Telegram
-    $subs = ['wizard' => __('Setup wizard', 'aiworker-chat'), 'mcp' => 'MCP', 'telegram' => 'Telegram'];
+    $subs = ['wizard' => __('Setup wizard', 'needtome-ai-chat'), 'mcp' => 'MCP', 'telegram' => 'Telegram'];
     // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only sub-tab choice.
     $sub = isset($_GET['aiwc_sub']) ? sanitize_key(wp_unslash((string) $_GET['aiwc_sub'])) : 'wizard';
     if (! isset($subs[$sub])) $sub = 'wizard';
@@ -285,13 +285,13 @@ function aiworker_chat_wizard_block(bool $collapsed = false): void {
         <?php foreach ($subs as $key => $label) : ?>
           <button type="button" role="tab" class="aiwc-aw__tab<?php echo $key === $sub ? ' is-active' : ''; ?>" aria-selected="<?php echo $key === $sub ? 'true' : 'false'; ?>" aria-controls="aiwc-sub-<?php echo esc_attr($key); ?>" data-sub="<?php echo esc_attr($key); ?>"><?php echo esc_html($label); ?></button>
         <?php endforeach; ?>
-        <button type="button" class="aiwc-aw__fold" aria-controls="aiwc-wizard" aria-expanded="<?php echo $collapsed ? 'false' : 'true'; ?>" data-label-open="<?php esc_attr_e('Expand', 'aiworker-chat'); ?>" data-label-close="<?php esc_attr_e('Collapse', 'aiworker-chat'); ?>"><span><?php echo esc_html($collapsed ? __('Expand', 'aiworker-chat') : __('Collapse', 'aiworker-chat')); ?></span><i aria-hidden="true"></i></button>
+        <button type="button" class="aiwc-aw__fold" aria-controls="aiwc-wizard" aria-expanded="<?php echo $collapsed ? 'false' : 'true'; ?>" data-label-open="<?php esc_attr_e('Expand', 'needtome-ai-chat'); ?>" data-label-close="<?php esc_attr_e('Collapse', 'needtome-ai-chat'); ?>"><span><?php echo esc_html($collapsed ? __('Expand', 'needtome-ai-chat') : __('Collapse', 'needtome-ai-chat')); ?></span><i aria-hidden="true"></i></button>
       </div>
       <div class="aiwc-aw__pane" id="aiwc-sub-mcp" role="tabpanel"<?php echo $sub === 'mcp' ? '' : ' hidden'; ?>><?php aiworker_chat_mcp_tab(true); ?></div>
       <div class="aiwc-aw__pane" id="aiwc-sub-telegram" role="tabpanel"<?php echo $sub === 'telegram' ? '' : ' hidden'; ?>><?php aiworker_chat_telegram_tab(true); ?></div>
       <div class="aiwc-aw__pane" id="aiwc-sub-wizard" role="tabpanel"<?php echo $sub === 'wizard' ? '' : ' hidden'; ?>>
-      <p class="description"><?php esc_html_e('Ask in plain words: the wizard sets up the persona, the knowledge base, the greeting and the quick questions of the chat. It first shows each change and applies it after you press «Apply».', 'aiworker-chat'); ?></p>
-      <div class="aiwc-aw__log" data-aw="log" aria-live="polite"><p class="aiwc-aw__loading"><i class="aiwc-aw__spin" aria-hidden="true"></i> <?php esc_html_e('Loading from kra.name…', 'aiworker-chat'); ?></p></div>
+      <p class="description"><?php esc_html_e('Ask in plain words: the wizard sets up the persona, the knowledge base, the greeting and the quick questions of the chat. It first shows each change and applies it after you press «Apply».', 'needtome-ai-chat'); ?></p>
+      <div class="aiwc-aw__log" data-aw="log" aria-live="polite"><p class="aiwc-aw__loading"><i class="aiwc-aw__spin" aria-hidden="true"></i> <?php esc_html_e('Loading from kra.name…', 'needtome-ai-chat'); ?></p></div>
       <div class="aiwc-aw__pending" data-aw="pending" hidden></div>
       <div class="aiwc-aw__error notice notice-error inline" data-aw="error" hidden><p></p></div>
       <div class="aiwc-aw__ask">
@@ -303,8 +303,8 @@ function aiworker_chat_wizard_block(bool $collapsed = false): void {
         </div>
         <p class="aiwc-aw__mic-status description" data-aw="micStatus" role="status" aria-live="polite" hidden></p>
         <div class="aiwc-aw__actions">
-          <button type="button" class="button button-primary" data-aw="send"><?php esc_html_e('Send', 'aiworker-chat'); ?></button>
-          <button type="button" class="button-link" data-aw="clear"><?php esc_html_e('Start a new conversation', 'aiworker-chat'); ?></button>
+          <button type="button" class="button button-primary" data-aw="send"><?php esc_html_e('Send', 'needtome-ai-chat'); ?></button>
+          <button type="button" class="button-link" data-aw="clear"><?php esc_html_e('Start a new conversation', 'needtome-ai-chat'); ?></button>
         </div>
       </div>
       </div>
@@ -345,15 +345,15 @@ function aiworker_chat_assistant_tab(): void {
     <div class="aiwc-aw" id="aiwc-wizard">
       <?php aiworker_chat_assistant_bar(); ?>
       <section class="aiwc-card">
-        <h2><?php esc_html_e('Statistics', 'aiworker-chat'); ?>
+        <h2><?php esc_html_e('Statistics', 'needtome-ai-chat'); ?>
           <select data-aw="period">
-            <option value="7d"><?php esc_html_e('7 days', 'aiworker-chat'); ?></option>
-            <option value="30d"><?php esc_html_e('30 days', 'aiworker-chat'); ?></option>
-            <option value="month"><?php esc_html_e('This month', 'aiworker-chat'); ?></option>
+            <option value="7d"><?php esc_html_e('7 days', 'needtome-ai-chat'); ?></option>
+            <option value="30d"><?php esc_html_e('30 days', 'needtome-ai-chat'); ?></option>
+            <option value="month"><?php esc_html_e('This month', 'needtome-ai-chat'); ?></option>
           </select>
         </h2>
         <div class="aiwc-aw__error notice notice-error inline" data-aw="error" hidden><p></p></div>
-        <div data-aw="stats"><p class="aiwc-aw__loading"><i class="aiwc-aw__spin" aria-hidden="true"></i> <?php esc_html_e('Loading from kra.name…', 'aiworker-chat'); ?></p></div>
+        <div data-aw="stats"><p class="aiwc-aw__loading"><i class="aiwc-aw__spin" aria-hidden="true"></i> <?php esc_html_e('Loading from kra.name…', 'needtome-ai-chat'); ?></p></div>
       </section>
     </div>
     <?php aiworker_chat_assistant_forms(); ?>

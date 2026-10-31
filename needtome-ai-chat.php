@@ -10,7 +10,7 @@
  * Author URI: https://needtome.com/
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain: aiworker-chat
+ * Text Domain: needtome-ai-chat
  * Domain Path: /languages
  */
 
@@ -41,10 +41,10 @@ const AIWORKER_CHAT_COLOR_KEYS = ['header_bg', 'header_text', 'bg', 'surface', '
 add_action('admin_init', static function (): void {
     $locale = aiworker_chat_polylang_admin_locale();
     if ($locale !== '' && $locale !== determine_locale()) {
-        $mofile = WP_LANG_DIR.'/plugins/aiworker-chat-'.$locale.'.mo';
+        $mofile = WP_LANG_DIR.'/plugins/needtome-ai-chat-'.$locale.'.mo';
         if (is_readable($mofile)) {
-            unload_textdomain('aiworker-chat');
-            load_textdomain('aiworker-chat', $mofile);
+            unload_textdomain('needtome-ai-chat');
+            load_textdomain('needtome-ai-chat', $mofile);
         }
     }
 }, 1);
@@ -101,15 +101,15 @@ function aiworker_chat_site_languages(): array {
 }
 
 function aiworker_chat_schemes(): array {
-    return ['' => __('As set for the chat at kra.name', 'aiworker-chat'), 'light' => __('Light', 'aiworker-chat'), 'dim' => __('Dim (grey-blue)', 'aiworker-chat'),
-        'dark' => __('Dark', 'aiworker-chat'), 'auto' => __('Follow the visitor\'s system', 'aiworker-chat')];
+    return ['' => __('As set for the chat at kra.name', 'needtome-ai-chat'), 'light' => __('Light', 'needtome-ai-chat'), 'dim' => __('Dim (grey-blue)', 'needtome-ai-chat'),
+        'dark' => __('Dark', 'needtome-ai-chat'), 'auto' => __('Follow the visitor\'s system', 'needtome-ai-chat')];
 }
 
 function aiworker_chat_color_labels(): array {
-    return ['header_bg' => __('Header: background', 'aiworker-chat'), 'header_text' => __('Header: text', 'aiworker-chat'), 'bg' => __('Conversation background', 'aiworker-chat'),
-        'surface' => __('Window and panels', 'aiworker-chat'), 'text' => __('Main text', 'aiworker-chat'), 'muted' => __('Secondary text', 'aiworker-chat'),
-        'border' => __('Borders and lines', 'aiworker-chat'), 'visitor_bubble' => __('Visitor messages: background', 'aiworker-chat'), 'visitor_text' => __('Visitor messages: text', 'aiworker-chat'),
-        'ai_bubble' => __('Consultant answers: background', 'aiworker-chat'), 'input_bg' => __('Input field: background', 'aiworker-chat')];
+    return ['header_bg' => __('Header: background', 'needtome-ai-chat'), 'header_text' => __('Header: text', 'needtome-ai-chat'), 'bg' => __('Conversation background', 'needtome-ai-chat'),
+        'surface' => __('Window and panels', 'needtome-ai-chat'), 'text' => __('Main text', 'needtome-ai-chat'), 'muted' => __('Secondary text', 'needtome-ai-chat'),
+        'border' => __('Borders and lines', 'needtome-ai-chat'), 'visitor_bubble' => __('Visitor messages: background', 'needtome-ai-chat'), 'visitor_text' => __('Visitor messages: text', 'needtome-ai-chat'),
+        'ai_bubble' => __('Consultant answers: background', 'needtome-ai-chat'), 'input_bg' => __('Input field: background', 'needtome-ai-chat')];
 }
 
 /** The kra.name installation the widget comes from; a developer may point a test site elsewhere with this filter. */
@@ -267,7 +267,7 @@ function aiworker_chat_preview_lang(array $o): string {
 }
 
 function aiworker_chat_check(string $key, bool $fresh = false): array {
-    if (! aiworker_chat_valid_key($key)) return ['state' => 'error', 'text' => __('The key is missing or has a wrong format (wk_ and 24 letters or digits).', 'aiworker-chat'), 'voice_allowed' => false];
+    if (! aiworker_chat_valid_key($key)) return ['state' => 'error', 'text' => __('The key is missing or has a wrong format (wk_ and 24 letters or digits).', 'needtome-ai-chat'), 'voice_allowed' => false];
     $cached = $fresh ? false : get_transient('aiworker_chat_check');
     // the texts are in the screen's language, so a check cached in another language is made again
     // the consultant's name and role come in the preview's language (with «auto», kra.name answers in the chat's
@@ -280,7 +280,7 @@ function aiworker_chat_check(string $key, bool $fresh = false): array {
     $result = ['voice_allowed' => false, 'unreachable' => false, 'http' => 0, 'setup_required' => false];
     if (is_wp_error($response)) {
         /* translators: %s: the network error */
-        $result = ['state' => 'error', 'unreachable' => true, 'text' => sprintf(__('kra.name cannot be reached from this site: %s', 'aiworker-chat'), $response->get_error_message())] + $result;
+        $result = ['state' => 'error', 'unreachable' => true, 'text' => sprintf(__('kra.name cannot be reached from this site: %s', 'needtome-ai-chat'), $response->get_error_message())] + $result;
     } else {
         $code = (int) wp_remote_retrieve_response_code($response);
         $body = json_decode((string) wp_remote_retrieve_body($response), true);
@@ -288,13 +288,13 @@ function aiworker_chat_check(string $key, bool $fresh = false): array {
         $result['setup_required'] = $code === 200 && is_array($body) && ! empty($body['setup_required']);
         $host = (string) wp_parse_url($origin, PHP_URL_HOST);
         /* translators: %s: this site's domain */
-        if ($code === 403) $result += ['state' => 'error', 'text' => sprintf(__('The domain %s is not in this chat\'s allowed sites at kra.name. Until it is added, the chat does not appear on the site.', 'aiworker-chat'), $host)];
-        elseif ($code === 404) $result += ['state' => 'error', 'text' => __('No chat with this key, or the chat is switched off (for example, its subscription ended). Check the key on the chat\'s card at kra.name.', 'aiworker-chat')];
-        elseif ($code === 200 && is_array($body) && ! empty($body['ok']) && ! empty($body['setup_required'])) $result = ['state' => 'warning', 'text' => __('The key and the domain are fine, but the chat is not set up yet: visitors will see a request to finish the setup (instructions and knowledge base at kra.name).', 'aiworker-chat')] + $result;
+        if ($code === 403) $result += ['state' => 'error', 'text' => sprintf(__('The domain %s is not in this chat\'s allowed sites at kra.name. Until it is added, the chat does not appear on the site.', 'needtome-ai-chat'), $host)];
+        elseif ($code === 404) $result += ['state' => 'error', 'text' => __('No chat with this key, or the chat is switched off (for example, its subscription ended). Check the key on the chat\'s card at kra.name.', 'needtome-ai-chat')];
+        elseif ($code === 200 && is_array($body) && ! empty($body['ok']) && ! empty($body['setup_required'])) $result = ['state' => 'warning', 'text' => __('The key and the domain are fine, but the chat is not set up yet: visitors will see a request to finish the setup (instructions and knowledge base at kra.name).', 'needtome-ai-chat')] + $result;
         /* translators: 1: this site's domain, 2: the chat's name */
-        elseif ($code === 200 && is_array($body) && ! empty($body['ok'])) $result = ['state' => 'success', 'text' => sprintf(__('Connected: the key is right, %1$s is allowed, the chat «%2$s» is ready to answer.', 'aiworker-chat'), $host, sanitize_text_field((string) ($body['name'] ?? '')))] + $result;
+        elseif ($code === 200 && is_array($body) && ! empty($body['ok'])) $result = ['state' => 'success', 'text' => sprintf(__('Connected: the key is right, %1$s is allowed, the chat «%2$s» is ready to answer.', 'needtome-ai-chat'), $host, sanitize_text_field((string) ($body['name'] ?? '')))] + $result;
         /* translators: %d: HTTP status code */
-        else $result = ['state' => 'error', 'unreachable' => true, 'text' => sprintf(__('Unexpected answer from kra.name (HTTP %d).', 'aiworker-chat'), $code)] + $result;
+        else $result = ['state' => 'error', 'unreachable' => true, 'text' => sprintf(__('Unexpected answer from kra.name (HTTP %d).', 'needtome-ai-chat'), $code)] + $result;
         // the consultant's name, role, avatar, the chat's own scheme and its paid add-ons feed the preview and the form
         if ($code === 200 && is_array($body) && ! empty($body['ok'])) {
             $result['voice_allowed'] = ! empty($body['voice_allowed']);
@@ -508,11 +508,11 @@ add_action('admin_init', static function (): void {
 add_action('update_option_'.AIWORKER_CHAT_OPTION, static function (): void { delete_transient('aiworker_chat_check'); delete_transient('aiworker_chat_csp'); });
 
 add_action('admin_menu', static function (): void {
-    Aiworker_Chat_Profile::menu(__('NeedToMe AI Chat', 'aiworker-chat'), 'aiworker-chat', 'aiworker_chat_settings_page', 'manage_options', __('AI Chat', 'aiworker-chat'));
+    Aiworker_Chat_Profile::menu(__('NeedToMe AI Chat', 'needtome-ai-chat'), 'aiworker-chat', 'aiworker_chat_settings_page', 'manage_options', __('AI Chat', 'needtome-ai-chat'));
 });
 
 add_filter('plugin_action_links_'.plugin_basename(__FILE__), static function (array $links): array {
-    array_unshift($links, '<a href="'.esc_url(Aiworker_Chat_Profile::url('aiworker-chat')).'">'.esc_html__('Settings', 'aiworker-chat').'</a>');
+    array_unshift($links, '<a href="'.esc_url(Aiworker_Chat_Profile::url('aiworker-chat')).'">'.esc_html__('Settings', 'needtome-ai-chat').'</a>');
     return $links;
 });
 
@@ -567,21 +567,21 @@ function aiworker_chat_settings_page(): void {
         foreach ($options as $v => $label) $h .= '<option value="'.esc_attr((string) $v).'"'.selected($current, (string) $v, false).'>'.esc_html($label).'</option>';
         return $h.'</select>';
     };
-    $pill = ! $o['key'] ? ['off', __('Not connected', 'aiworker-chat')] : ($connected ? ($check['state'] === 'success' ? ['ok', __('Connected', 'aiworker-chat')] : ['warn', __('Needs setup at kra.name', 'aiworker-chat')]) : ['err', __('Not working', 'aiworker-chat')]);
+    $pill = ! $o['key'] ? ['off', __('Not connected', 'needtome-ai-chat')] : ($connected ? ($check['state'] === 'success' ? ['ok', __('Connected', 'needtome-ai-chat')] : ['warn', __('Needs setup at kra.name', 'needtome-ai-chat')]) : ['err', __('Not working', 'needtome-ai-chat')]);
     $live = $o['enabled'] && $connected;
     aiworker_chat_admin_styles();
     ?>
     <div class="wrap aiwc">
       <div class="aiwc-head">
-        <h1><?php esc_html_e('NeedToMe AI Chat', 'aiworker-chat'); ?> <span><?php esc_html_e('for your site', 'aiworker-chat'); ?></span></h1>
+        <h1><?php esc_html_e('NeedToMe AI Chat', 'needtome-ai-chat'); ?> <span><?php esc_html_e('for your site', 'needtome-ai-chat'); ?></span></h1>
         <?php if ($activeTab === 'settings') : ?>
           <span class="aiwc-pill aiwc-pill--<?php echo esc_attr($pill[0]); ?>"><?php echo esc_html($pill[1]); ?></span>
-          <span class="aiwc-pill aiwc-pill--<?php echo $live ? 'ok' : 'off'; ?>"><?php echo $live ? esc_html__('Shown on the site', 'aiworker-chat') : esc_html__('Hidden on the site', 'aiworker-chat'); ?></span>
+          <span class="aiwc-pill aiwc-pill--<?php echo $live ? 'ok' : 'off'; ?>"><?php echo $live ? esc_html__('Shown on the site', 'needtome-ai-chat') : esc_html__('Hidden on the site', 'needtome-ai-chat'); ?></span>
         <?php endif; ?>
       </div>
       <h2 class="nav-tab-wrapper aiwc-tabs">
         <?php
-        $tabs = ['settings' => __('Settings', 'aiworker-chat'), 'kb' => __('Knowledge base', 'aiworker-chat'), 'assistant' => __('Statistics', 'aiworker-chat')] + Aiworker_Chat_Profile::tab_labels();
+        $tabs = ['settings' => __('Settings', 'needtome-ai-chat'), 'kb' => __('Knowledge base', 'needtome-ai-chat'), 'assistant' => __('Statistics', 'needtome-ai-chat')] + Aiworker_Chat_Profile::tab_labels();
         if (! $oauth) unset($tabs['assistant']);
         foreach ($tabs as $tab => $label) :
             $tabUrl = Aiworker_Chat_Profile::url('aiworker-chat', ['tab' => $tab]);
@@ -591,16 +591,16 @@ function aiworker_chat_settings_page(): void {
       </h2>
       <?php if ($activeTab === 'settings') : ?>
       <?php aiworker_chat_assistant_notice(); ?>
-      <?php if ($csp && ($csp['gaps'] || ! empty($csp['nonce']))): ?><div class="notice notice-error inline"><p><strong><?php esc_html_e('This site\'s Content-Security-Policy will block the chat.', 'aiworker-chat'); ?></strong><?php if ($csp['gaps']): ?> <?php esc_html_e('Use these directives in the CSP header of your theme or security plugin (each replaces the directive of the same name):', 'aiworker-chat'); ?><?php endif; ?></p>
+      <?php if ($csp && ($csp['gaps'] || ! empty($csp['nonce']))): ?><div class="notice notice-error inline"><p><strong><?php esc_html_e('This site\'s Content-Security-Policy will block the chat.', 'needtome-ai-chat'); ?></strong><?php if ($csp['gaps']): ?> <?php esc_html_e('Use these directives in the CSP header of your theme or security plugin (each replaces the directive of the same name):', 'needtome-ai-chat'); ?><?php endif; ?></p>
         <?php if ($csp['gaps']): ?><p><code><?php echo esc_html(implode('; ', $csp['gaps'])); ?></code></p><?php endif; ?>
-        <?php if (! empty($csp['nonce'])): ?><p><?php esc_html_e('The policy uses \'strict-dynamic\': the script tag aiworker-chat-loader needs the policy\'s nonce (security plugins that add nonces to WordPress scripts do this).', 'aiworker-chat'); ?></p><?php endif; ?>
-        <p class="description"><?php echo wp_kses(__('Developers can take this list from <code>aiworker_chat_csp_sources()</code>.', 'aiworker-chat'), ['code' => []]); ?></p></div><?php endif; ?>
+        <?php if (! empty($csp['nonce'])): ?><p><?php esc_html_e('The policy uses \'strict-dynamic\': the script tag aiworker-chat-loader needs the policy\'s nonce (security plugins that add nonces to WordPress scripts do this).', 'needtome-ai-chat'); ?></p><?php endif; ?>
+        <p class="description"><?php echo wp_kses(__('Developers can take this list from <code>aiworker_chat_csp_sources()</code>.', 'needtome-ai-chat'), ['code' => []]); ?></p></div><?php endif; ?>
       <form method="post" action="options.php" class="aiwc-grid">
         <?php settings_fields('aiworker_chat'); ?>
         <div class="aiwc-main">
 
           <section class="aiwc-card aiwc-card--connect">
-            <h2><span class="aiwc-num">1</span><?php esc_html_e('Connect your chat', 'aiworker-chat'); ?></h2>
+            <h2><span class="aiwc-num">1</span><?php esc_html_e('Connect your chat', 'needtome-ai-chat'); ?></h2>
             <?php
             // connected through AI Worker with the chat it linked: the chat is chosen in the box, the key is not typed
             $linkedMode = $oauth && $o['key'] !== '' && (int) get_option(AIWORKER_CHAT_LINKED_OPTION, 0) > 0;
@@ -609,16 +609,16 @@ function aiworker_chat_settings_page(): void {
             ?>
             <p class="aiwc-lead"><?php echo wp_kses(sprintf(
                 /* translators: %s: link to kra.name */
-                __('The AI consultant\'s knowledge base and instructions are filled in at the %s client panel:', 'aiworker-chat'),
+                __('The AI consultant\'s knowledge base and instructions are filled in at the %s client panel:', 'needtome-ai-chat'),
                 '<a href="https://kra.name/" target="_blank" rel="noopener">kra.name</a>'), ['a' => ['href' => [], 'target' => [], 'rel' => []]]); ?></p>
             <?php $allDone = ! in_array(false, $steps, true) && ! in_array(null, $steps, true);
             // all four done: one ✓ line; the steps open on a click
-            if ($allDone) : ?><details class="aiwc-steps-done"><summary><?php esc_html_e('Everything is connected', 'aiworker-chat'); ?></summary><?php endif; ?>
+            if ($allDone) : ?><details class="aiwc-steps-done"><summary><?php esc_html_e('Everything is connected', 'needtome-ai-chat'); ?></summary><?php endif; ?>
             <ol class="aiwc-steps aiwc-steps--check">
-              <li<?php echo $stepClass($steps[1]); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed markup. ?>><?php echo wp_kses(sprintf(/* translators: %s: link to the kra.name panel */ __('Sign up and create a site chat in the %s.', 'aiworker-chat'), '<a href="https://kra.name/app/panel" target="_blank" rel="noopener">'.esc_html__('kra.name panel', 'aiworker-chat').'</a>'), ['a' => ['href' => [], 'target' => [], 'rel' => []]]); ?></li>
-              <li<?php echo $stepClass($steps[2]); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed markup. ?>><?php esc_html_e('Choose the consultant and fill the chat\'s knowledge base.', 'aiworker-chat'); ?></li>
-              <li<?php echo $stepClass($steps[3]); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed markup. ?>><?php if ($linkedMode) : echo wp_kses(sprintf(/* translators: %s: this site's domain */ __('%s was added to the chat\'s allowed sites automatically.', 'aiworker-chat'), '<code>'.esc_html($host).'</code>'), ['code' => []]); else : ?><?php echo wp_kses(sprintf(/* translators: 1: this site's domain, 2: wildcard for its subdomains */ __('Add %1$s to the chat\'s allowed sites (www is included; %2$s allows every subdomain).', 'aiworker-chat'), '<code>'.esc_html($host).'</code>', '<code>*.'.esc_html(preg_replace('/^www\./', '', $host)).'</code>'), ['code' => []]); ?><?php endif; ?></li>
-              <li<?php echo $stepClass($steps[4]); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed markup. ?>><?php echo esc_html($linkedMode ? __('The chat\'s public key was put in automatically.', 'aiworker-chat') : __('Copy the public key wk_… from the chat\'s card and paste it here.', 'aiworker-chat')); ?></li>
+              <li<?php echo $stepClass($steps[1]); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed markup. ?>><?php echo wp_kses(sprintf(/* translators: %s: link to the kra.name panel */ __('Sign up and create a site chat in the %s.', 'needtome-ai-chat'), '<a href="https://kra.name/app/panel" target="_blank" rel="noopener">'.esc_html__('kra.name panel', 'needtome-ai-chat').'</a>'), ['a' => ['href' => [], 'target' => [], 'rel' => []]]); ?></li>
+              <li<?php echo $stepClass($steps[2]); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed markup. ?>><?php esc_html_e('Choose the consultant and fill the chat\'s knowledge base.', 'needtome-ai-chat'); ?></li>
+              <li<?php echo $stepClass($steps[3]); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed markup. ?>><?php if ($linkedMode) : echo wp_kses(sprintf(/* translators: %s: this site's domain */ __('%s was added to the chat\'s allowed sites automatically.', 'needtome-ai-chat'), '<code>'.esc_html($host).'</code>'), ['code' => []]); else : ?><?php echo wp_kses(sprintf(/* translators: 1: this site's domain, 2: wildcard for its subdomains */ __('Add %1$s to the chat\'s allowed sites (www is included; %2$s allows every subdomain).', 'needtome-ai-chat'), '<code>'.esc_html($host).'</code>', '<code>*.'.esc_html(preg_replace('/^www\./', '', $host)).'</code>'), ['code' => []]); ?><?php endif; ?></li>
+              <li<?php echo $stepClass($steps[4]); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Fixed markup. ?>><?php echo esc_html($linkedMode ? __('The chat\'s public key was put in automatically.', 'needtome-ai-chat') : __('Copy the public key wk_… from the chat\'s card and paste it here.', 'needtome-ai-chat')); ?></li>
             </ol>
             <?php if ($allDone) : ?></details><?php endif; ?>
             <div class="aiwc-connect-row<?php echo $linkedMode ? ' aiwc-connect-row--linked' : ''; ?>">
@@ -626,15 +626,15 @@ function aiworker_chat_settings_page(): void {
             <input type="hidden" name="<?php echo esc_attr($name); ?>[key]" value="<?php echo esc_attr($o['key']); ?>">
             <?php else : ?>
             <div class="aiwc-key">
-              <label for="aiwc-key"><?php esc_html_e('Public chat key', 'aiworker-chat'); ?></label>
+              <label for="aiwc-key"><?php esc_html_e('Public chat key', 'needtome-ai-chat'); ?></label>
               <div class="aiwc-key__row">
                 <input id="aiwc-key" type="text" name="<?php echo esc_attr($name); ?>[key]" value="<?php echo esc_attr($o['key']); ?>" pattern="wk_[A-Za-z0-9]{24}" placeholder="wk_xxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false">
-                <button type="submit" class="button button-secondary" id="aiwc-key-save"<?php echo $o['key'] !== '' ? ' hidden' : ''; ?>><?php esc_html_e('Save and check', 'aiworker-chat'); ?></button>
+                <button type="submit" class="button button-secondary" id="aiwc-key-save"<?php echo $o['key'] !== '' ? ' hidden' : ''; ?>><?php esc_html_e('Save and check', 'needtome-ai-chat'); ?></button>
               </div>
               <script>
               (function (i, b) { var saved = i.value; i.addEventListener('input', function () { b.hidden = i.value.trim() === saved; }); })(document.getElementById('aiwc-key'), document.getElementById('aiwc-key-save'));
               </script>
-              <p class="description"><?php esc_html_e('The key only selects the chat; it is not a secret.', 'aiworker-chat'); ?></p>
+              <p class="description"><?php esc_html_e('The key only selects the chat; it is not a secret.', 'needtome-ai-chat'); ?></p>
             </div>
             <?php endif; ?>
             <?php aiworker_chat_pick_panel(); ?>
@@ -643,81 +643,81 @@ function aiworker_chat_settings_page(): void {
             <?php // all fine is already the ✓ of the steps above; a problem keeps its line, which says what to fix
             if ($check && $check['state'] !== 'success'): ?>
               <div class="aiwc-status aiwc-status--<?php echo esc_attr($check['state']); ?>"><?php echo esc_html($check['text']); ?>
-                <a href="<?php echo esc_url(wp_nonce_url(Aiworker_Chat_Profile::url('aiworker-chat', ['aiwc_recheck' => 1]), 'aiwc_recheck')); ?>"><?php esc_html_e('Check again', 'aiworker-chat'); ?></a></div>
+                <a href="<?php echo esc_url(wp_nonce_url(Aiworker_Chat_Profile::url('aiworker-chat', ['aiwc_recheck' => 1]), 'aiwc_recheck')); ?>"><?php esc_html_e('Check again', 'needtome-ai-chat'); ?></a></div>
             <?php endif; ?>
             <label class="aiwc-toggle<?php echo $canEnable ? '' : ' is-off'; ?>">
               <input type="checkbox" name="<?php echo esc_attr($name); ?>[enabled]" value="1" <?php checked($o['enabled'] && $canEnable); ?> <?php disabled(! $canEnable); ?>>
               <span class="aiwc-toggle__ui" aria-hidden="true"></span>
-              <span><strong><?php esc_html_e('Show the chat on this site', 'aiworker-chat'); ?></strong>
-                <small><?php echo $canEnable ? esc_html__('Visitors see the chat on the pages chosen below.', 'aiworker-chat') : esc_html__('Available once a working key is saved and checked.', 'aiworker-chat'); ?></small></span>
+              <span><strong><?php esc_html_e('Show the chat on this site', 'needtome-ai-chat'); ?></strong>
+                <small><?php echo $canEnable ? esc_html__('Visitors see the chat on the pages chosen below.', 'needtome-ai-chat') : esc_html__('Available once a working key is saved and checked.', 'needtome-ai-chat'); ?></small></span>
             </label>
           </section>
 
           <section class="aiwc-card">
-            <h2><span class="aiwc-num">2</span><?php esc_html_e('Look', 'aiworker-chat'); ?></h2>
+            <h2><span class="aiwc-num">2</span><?php esc_html_e('Look', 'needtome-ai-chat'); ?></h2>
             <?php
-            aiworker_chat_row(__('Design', 'aiworker-chat'), $sel('theme', ['classic' => __('Classic: button and window', 'aiworker-chat'), 'bar' => __('Bar at the bottom', 'aiworker-chat'), 'panel' => __('Side panel', 'aiworker-chat'), 'inline' => __('Inside a page block', 'aiworker-chat')], (string) $o['theme'], 'aiwc-theme'), '', 'aiwc-theme');
-            aiworker_chat_row(__('Block id', 'aiworker-chat'), '<input id="aiwc-mount" type="text" class="regular-text" name="'.$name.'[mount]" value="'.esc_attr((string) $o['mount']).'" pattern="[#.]?[A-Za-z][A-Za-z0-9_\-]{0,63}">',
-                wp_kses(sprintf(/* translators: 1: the shortcode, 2: the HTML element */ __('Put the %1$s shortcode into a post or page (or %2$s into the theme). Pages without the block show the usual button.', 'aiworker-chat'), '<code>[aiworker_chat]</code>', '<code>&lt;div id="'.esc_html((string) $o['mount']).'"&gt;&lt;/div&gt;</code>'), ['code' => []]), 'aiwc-mount', 'aiwc-inline-only');
-            aiworker_chat_row(__('Block height, px', 'aiworker-chat'), '<input id="aiwc-height" type="number" min="320" max="1200" name="'.$name.'[height]" value="'.esc_attr((string) $o['height']).'">', '', 'aiwc-height', 'aiwc-inline-only');
-            aiworker_chat_row(__('Accent colour', 'aiworker-chat'), '<input id="aiwc-color" class="aiwc-color aiwc-color--accent" type="text" name="'.$name.'[color]" value="'.esc_attr($o['color']).'" data-default-color="#4f46e5">', '', 'aiwc-color');
-            aiworker_chat_row(__('Colour scheme', 'aiworker-chat'), $sel('scheme', aiworker_chat_schemes(), (string) $o['scheme'], 'aiwc-scheme'), esc_html__('«Follow the visitor\'s system» switches between light and dark by the device setting.', 'aiworker-chat'), 'aiwc-scheme');
-            $colors = '<details class="aiwc-colors"'.(! empty($o['colors']) ? ' open' : '').'><summary>'.esc_html__('Change separate colours', 'aiworker-chat').'</summary><p class="description">'.esc_html__('Empty means the scheme\'s colour.', 'aiworker-chat').'</p><div class="aiwc-colors__grid">';
+            aiworker_chat_row(__('Design', 'needtome-ai-chat'), $sel('theme', ['classic' => __('Classic: button and window', 'needtome-ai-chat'), 'bar' => __('Bar at the bottom', 'needtome-ai-chat'), 'panel' => __('Side panel', 'needtome-ai-chat'), 'inline' => __('Inside a page block', 'needtome-ai-chat')], (string) $o['theme'], 'aiwc-theme'), '', 'aiwc-theme');
+            aiworker_chat_row(__('Block id', 'needtome-ai-chat'), '<input id="aiwc-mount" type="text" class="regular-text" name="'.$name.'[mount]" value="'.esc_attr((string) $o['mount']).'" pattern="[#.]?[A-Za-z][A-Za-z0-9_\-]{0,63}">',
+                wp_kses(sprintf(/* translators: 1: the shortcode, 2: the HTML element */ __('Put the %1$s shortcode into a post or page (or %2$s into the theme). Pages without the block show the usual button.', 'needtome-ai-chat'), '<code>[aiworker_chat]</code>', '<code>&lt;div id="'.esc_html((string) $o['mount']).'"&gt;&lt;/div&gt;</code>'), ['code' => []]), 'aiwc-mount', 'aiwc-inline-only');
+            aiworker_chat_row(__('Block height, px', 'needtome-ai-chat'), '<input id="aiwc-height" type="number" min="320" max="1200" name="'.$name.'[height]" value="'.esc_attr((string) $o['height']).'">', '', 'aiwc-height', 'aiwc-inline-only');
+            aiworker_chat_row(__('Accent colour', 'needtome-ai-chat'), '<input id="aiwc-color" class="aiwc-color aiwc-color--accent" type="text" name="'.$name.'[color]" value="'.esc_attr($o['color']).'" data-default-color="#4f46e5">', '', 'aiwc-color');
+            aiworker_chat_row(__('Colour scheme', 'needtome-ai-chat'), $sel('scheme', aiworker_chat_schemes(), (string) $o['scheme'], 'aiwc-scheme'), esc_html__('«Follow the visitor\'s system» switches between light and dark by the device setting.', 'needtome-ai-chat'), 'aiwc-scheme');
+            $colors = '<details class="aiwc-colors"'.(! empty($o['colors']) ? ' open' : '').'><summary>'.esc_html__('Change separate colours', 'needtome-ai-chat').'</summary><p class="description">'.esc_html__('Empty means the scheme\'s colour.', 'needtome-ai-chat').'</p><div class="aiwc-colors__grid">';
             foreach (aiworker_chat_color_labels() as $k => $label) $colors .= '<div class="aiwc-colors__item"><span class="aiwc-colors__name">'.esc_html($label).'</span><input class="aiwc-color" type="text" name="'.$name.'[colors]['.esc_attr($k).']" value="'.esc_attr((string) ($o['colors'][$k] ?? '')).'" data-default-color="" aria-label="'.esc_attr($label).'"></div>';
-            aiworker_chat_row(__('Advanced colours', 'aiworker-chat'), $colors.'</div></details>');
-            aiworker_chat_row(__('Position', 'aiworker-chat'), $sel('position', ['right' => __('Right', 'aiworker-chat'), 'left' => __('Left', 'aiworker-chat')], (string) $o['position'], 'aiwc-position'), '', 'aiwc-position');
-            aiworker_chat_row(__('Button offset, px', 'aiworker-chat'), '<span class="aiwc-offset"><label>'.esc_html__('sideways', 'aiworker-chat').' <input id="aiwc-offset-x" type="number" min="-300" max="300" step="1" name="'.$name.'[offset_x]" value="'.esc_attr((string) $o['offset_x']).'" placeholder="—"></label>'
-                .'<label>'.esc_html__('up / down', 'aiworker-chat').' <input id="aiwc-offset-y" type="number" min="-300" max="300" step="1" name="'.$name.'[offset_y]" value="'.esc_attr((string) $o['offset_y']).'" placeholder="—"></label></span>',
-                esc_html__('Moves the chat button from its corner: positive values go right and down. Empty uses the offset set for the chat at kra.name. Watch the button in the corner of this page.', 'aiworker-chat'), 'aiwc-offset-x');
+            aiworker_chat_row(__('Advanced colours', 'needtome-ai-chat'), $colors.'</div></details>');
+            aiworker_chat_row(__('Position', 'needtome-ai-chat'), $sel('position', ['right' => __('Right', 'needtome-ai-chat'), 'left' => __('Left', 'needtome-ai-chat')], (string) $o['position'], 'aiwc-position'), '', 'aiwc-position');
+            aiworker_chat_row(__('Button offset, px', 'needtome-ai-chat'), '<span class="aiwc-offset"><label>'.esc_html__('sideways', 'needtome-ai-chat').' <input id="aiwc-offset-x" type="number" min="-300" max="300" step="1" name="'.$name.'[offset_x]" value="'.esc_attr((string) $o['offset_x']).'" placeholder="—"></label>'
+                .'<label>'.esc_html__('up / down', 'needtome-ai-chat').' <input id="aiwc-offset-y" type="number" min="-300" max="300" step="1" name="'.$name.'[offset_y]" value="'.esc_attr((string) $o['offset_y']).'" placeholder="—"></label></span>',
+                esc_html__('Moves the chat button from its corner: positive values go right and down. Empty uses the offset set for the chat at kra.name. Watch the button in the corner of this page.', 'needtome-ai-chat'), 'aiwc-offset-x');
             ?>
           </section>
 
           <section class="aiwc-card">
-            <h2><span class="aiwc-num">3</span><?php esc_html_e('Where to show the chat', 'aiworker-chat'); ?></h2>
+            <h2><span class="aiwc-num">3</span><?php esc_html_e('Where to show the chat', 'needtome-ai-chat'); ?></h2>
             <?php
-            aiworker_chat_row(__('Pages', 'aiworker-chat'), $sel('pages_mode', ['all' => __('On every page', 'aiworker-chat'), 'only' => __('Only on the pages listed', 'aiworker-chat'), 'except' => __('On every page except those listed', 'aiworker-chat')], (string) $o['pages_mode'], 'aiwc-pages-mode'), '', 'aiwc-pages-mode');
-            aiworker_chat_row(__('Page list', 'aiworker-chat'), '<textarea id="aiwc-pages" name="'.$name.'[pages]" rows="5" class="large-text code" placeholder="/&#10;/contacts/&#10;/shop/*">'.esc_textarea((string) $o['pages']).'</textarea>',
-                wp_kses(__('One page per line, without the site address: <code>/</code> is the home page, <code>/contacts/</code> one page, <code>/shop/*</code> a section with everything inside it.', 'aiworker-chat'), ['code' => []]), 'aiwc-pages', 'aiwc-pages-only');
-            aiworker_chat_row(__('Show the chat', 'aiworker-chat'), $sel('load', ['immediate' => __('When the page opens', 'aiworker-chat'), 'interaction' => __('After the visitor\'s first action (scroll, tap, key)', 'aiworker-chat'), 'delay' => __('After a delay', 'aiworker-chat')], (string) $o['load'], 'aiwc-load')
-                .' <span class="aiwc-delay"><input id="aiwc-delay" type="number" min="1" max="120" name="'.$name.'[delay]" value="'.esc_attr((string) $o['delay']).'"> '.esc_html__('seconds', 'aiworker-chat').'</span>',
-                esc_html__('A later start does not slow the page down.', 'aiworker-chat'), 'aiwc-load');
-            $langs = ['auto' => __('Auto: the language of the page', 'aiworker-chat')] + aiworker_chat_site_languages();
+            aiworker_chat_row(__('Pages', 'needtome-ai-chat'), $sel('pages_mode', ['all' => __('On every page', 'needtome-ai-chat'), 'only' => __('Only on the pages listed', 'needtome-ai-chat'), 'except' => __('On every page except those listed', 'needtome-ai-chat')], (string) $o['pages_mode'], 'aiwc-pages-mode'), '', 'aiwc-pages-mode');
+            aiworker_chat_row(__('Page list', 'needtome-ai-chat'), '<textarea id="aiwc-pages" name="'.$name.'[pages]" rows="5" class="large-text code" placeholder="/&#10;/contacts/&#10;/shop/*">'.esc_textarea((string) $o['pages']).'</textarea>',
+                wp_kses(__('One page per line, without the site address: <code>/</code> is the home page, <code>/contacts/</code> one page, <code>/shop/*</code> a section with everything inside it.', 'needtome-ai-chat'), ['code' => []]), 'aiwc-pages', 'aiwc-pages-only');
+            aiworker_chat_row(__('Show the chat', 'needtome-ai-chat'), $sel('load', ['immediate' => __('When the page opens', 'needtome-ai-chat'), 'interaction' => __('After the visitor\'s first action (scroll, tap, key)', 'needtome-ai-chat'), 'delay' => __('After a delay', 'needtome-ai-chat')], (string) $o['load'], 'aiwc-load')
+                .' <span class="aiwc-delay"><input id="aiwc-delay" type="number" min="1" max="120" name="'.$name.'[delay]" value="'.esc_attr((string) $o['delay']).'"> '.esc_html__('seconds', 'needtome-ai-chat').'</span>',
+                esc_html__('A later start does not slow the page down.', 'needtome-ai-chat'), 'aiwc-load');
+            $langs = ['auto' => __('Auto: the language of the page', 'needtome-ai-chat')] + aiworker_chat_site_languages();
             if (! isset($langs[$o['lang']])) $langs[(string) $o['lang']] = (string) $o['lang'];
-            aiworker_chat_row(__('Language', 'aiworker-chat'), $sel('lang', $langs, (string) $o['lang'], 'aiwc-lang'),
-                esc_html__('«Auto» speaks the language of the page the visitor opened (its URL prefix or language subdomain, then its lang attribute), otherwise the browser\'s. A chosen language is used on every page.', 'aiworker-chat'), 'aiwc-lang');
+            aiworker_chat_row(__('Language', 'needtome-ai-chat'), $sel('lang', $langs, (string) $o['lang'], 'aiwc-lang'),
+                esc_html__('«Auto» speaks the language of the page the visitor opened (its URL prefix or language subdomain, then its lang attribute), otherwise the browser\'s. A chosen language is used on every page.', 'needtome-ai-chat'), 'aiwc-lang');
             ?>
             <?php if ($oauth) aiworker_chat_lazy('channels'); else aiworker_chat_channels_block(); // the channel states come from kra.name ?>
           </section>
 
           <section class="aiwc-card">
-            <h2><span class="aiwc-num">4</span><?php esc_html_e('Features', 'aiworker-chat'); ?></h2>
+            <h2><span class="aiwc-num">4</span><?php esc_html_e('Features', 'needtome-ai-chat'); ?></h2>
             <?php
             $voiceEditable = $voiceAllowed || $unknown;
-            $voice = '<label class="aiwc-check'.($voiceEditable ? '' : ' is-off').'"><input type="checkbox" name="'.$name.'[voice]" value="1" '.checked($o['voice'] && $voiceEditable, true, false).' '.disabled(! $voiceEditable, true, false).'> '.esc_html__('Show the microphone: visitors dictate instead of typing', 'aiworker-chat').'</label>';
-            if (! $voiceEditable) $voice .= '<span class="aiwc-paid">'.esc_html__('Paid add-on', 'aiworker-chat').'</span>';
-            aiworker_chat_row(__('Voice input', 'aiworker-chat'), $voice, $voiceEditable ? '' : wp_kses(sprintf(/* translators: %s: link to the kra.name billing page */ __('Not included in your plan. Voice input is a paid add-on of the chat: turn it on in %s.', 'aiworker-chat'), '<a href="https://kra.name/app/panel/billing" target="_blank" rel="noopener">'.esc_html__('«Subscription»', 'aiworker-chat').'</a>'), ['a' => ['href' => [], 'target' => [], 'rel' => []]]));
-            aiworker_chat_row(__('Dialog rating', 'aiworker-chat'), '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[rating]" value="1" '.checked($o['rating'], 1, false).'> '.esc_html__('Ask for 1–5 stars when the consultant has answered every question', 'aiworker-chat').'</label>', esc_html__('If the rating is off for the chat at kra.name, this box does not turn it on.', 'aiworker-chat'));
-            $privacyHint = $privacyUrl ? '<a href="'.esc_url($privacyUrl).'" target="_blank" rel="noopener">'.esc_html($privacyUrl).'</a>' : esc_html__('No privacy page is chosen: set it in Settings → Privacy, otherwise the link does not appear.', 'aiworker-chat');
+            $voice = '<label class="aiwc-check'.($voiceEditable ? '' : ' is-off').'"><input type="checkbox" name="'.$name.'[voice]" value="1" '.checked($o['voice'] && $voiceEditable, true, false).' '.disabled(! $voiceEditable, true, false).'> '.esc_html__('Show the microphone: visitors dictate instead of typing', 'needtome-ai-chat').'</label>';
+            if (! $voiceEditable) $voice .= '<span class="aiwc-paid">'.esc_html__('Paid add-on', 'needtome-ai-chat').'</span>';
+            aiworker_chat_row(__('Voice input', 'needtome-ai-chat'), $voice, $voiceEditable ? '' : wp_kses(sprintf(/* translators: %s: link to the kra.name billing page */ __('Not included in your plan. Voice input is a paid add-on of the chat: turn it on in %s.', 'needtome-ai-chat'), '<a href="https://kra.name/app/panel/billing" target="_blank" rel="noopener">'.esc_html__('«Subscription»', 'needtome-ai-chat').'</a>'), ['a' => ['href' => [], 'target' => [], 'rel' => []]]));
+            aiworker_chat_row(__('Dialog rating', 'needtome-ai-chat'), '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[rating]" value="1" '.checked($o['rating'], 1, false).'> '.esc_html__('Ask for 1–5 stars when the consultant has answered every question', 'needtome-ai-chat').'</label>', esc_html__('If the rating is off for the chat at kra.name, this box does not turn it on.', 'needtome-ai-chat'));
+            $privacyHint = $privacyUrl ? '<a href="'.esc_url($privacyUrl).'" target="_blank" rel="noopener">'.esc_html($privacyUrl).'</a>' : esc_html__('No privacy page is chosen: set it in Settings → Privacy, otherwise the link does not appear.', 'needtome-ai-chat');
             $stepNo = 4;
-            aiworker_chat_row(__('Privacy policy', 'aiworker-chat'), '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[privacy]" value="1" '.checked($o['privacy'], 1, false).'> '.esc_html__('Show a link to this site\'s privacy policy in the chat', 'aiworker-chat').'</label>', $privacyHint);
+            aiworker_chat_row(__('Privacy policy', 'needtome-ai-chat'), '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[privacy]" value="1" '.checked($o['privacy'], 1, false).'> '.esc_html__('Show a link to this site\'s privacy policy in the chat', 'needtome-ai-chat').'</label>', $privacyHint);
             ?>
           </section>
 
           <?php if ($linkedMode) { aiworker_chat_lazy('chat', ++$stepNo, true); aiworker_chat_lazy('payment', ++$stepNo, true); } ?>
 
-          <div class="aiwc-save"><?php submit_button(__('Save settings', 'aiworker-chat'), 'primary large', 'submit', false); ?><button type="button" class="button aiwc-reset" hidden><?php esc_html_e('Reset preview', 'aiworker-chat'); ?></button><span class="aiwc-reset-done description" role="status" hidden><?php esc_html_e('Preview reset to the saved settings.', 'aiworker-chat'); ?></span><span class="description"><?php esc_html_e('The preview changes at once; the site gets the changes after saving.', 'aiworker-chat'); ?></span></div>
+          <div class="aiwc-save"><?php submit_button(__('Save settings', 'needtome-ai-chat'), 'primary large', 'submit', false); ?><button type="button" class="button aiwc-reset" hidden><?php esc_html_e('Reset preview', 'needtome-ai-chat'); ?></button><span class="aiwc-reset-done description" role="status" hidden><?php esc_html_e('Preview reset to the saved settings.', 'needtome-ai-chat'); ?></span><span class="description"><?php esc_html_e('The preview changes at once; the site gets the changes after saving.', 'needtome-ai-chat'); ?></span></div>
         </div>
         <aside class="aiwc-side"><?php if ($oauth) aiworker_chat_lazy('usage', 0, true); ?><?php aiworker_chat_preview($o, (array) ($check['persona'] ?? []), $voiceAllowed); ?></aside>
       </form>
       <?php aiworker_chat_pick_forms(); ?>
       <?php aiworker_chat_assistant_forms(); ?>
-      <?php Aiworker_Chat_Profile::support_box(__('NeedToMe AI Chat', 'aiworker-chat')); ?>
+      <?php Aiworker_Chat_Profile::support_box(__('NeedToMe AI Chat', 'needtome-ai-chat')); ?>
       <?php elseif ($activeTab === 'kb') : ?>
         <?php aiworker_chat_kb_tab(); ?>
       <?php elseif ($activeTab === 'assistant') : ?>
         <?php aiworker_chat_assistant_tab(); ?>
       <?php else : ?>
-        <?php Aiworker_Chat_Profile::tab($activeTab, 'aiworker-chat'); ?>
+        <?php Aiworker_Chat_Profile::tab($activeTab, 'needtome-ai-chat'); ?>
       <?php endif; ?>
     </div>
     <?php
@@ -741,9 +741,9 @@ function aiworker_chat_preview(array $o, array $persona, bool $voiceAllowed): vo
         // the preview always takes the current widget: kra.name serves it as immutable, so a daily version kept a widget
         // loaded before an update of the preview until the next day
         'src' => aiworker_chat_base().'/widget.js?v='.time(), 'data-demo' => '1', 'data-base' => aiworker_chat_base(), 'data-greet' => '1',
-        'data-name' => (string) ($persona['name'] ?? '') ?: __('Anna', 'aiworker-chat'), 'data-title' => (string) ($persona['title'] ?? '') ?: __('Consultant', 'aiworker-chat'), 'data-avatar' => (string) ($persona['avatar'] ?? ''),
+        'data-name' => (string) ($persona['name'] ?? '') ?: __('Anna', 'needtome-ai-chat'), 'data-title' => (string) ($persona['title'] ?? '') ?: __('Consultant', 'needtome-ai-chat'), 'data-avatar' => (string) ($persona['avatar'] ?? ''),
         'data-tab-label' => (string) ($persona['tab_label'] ?? ''), 'data-lang' => $lang ?: 'en',
-        'data-demo-note' => __('This is a preview in the WordPress settings: AI answers, voice and files work in the real chat on the site.', 'aiworker-chat'),
+        'data-demo-note' => __('This is a preview in the WordPress settings: AI answers, voice and files work in the real chat on the site.', 'needtome-ai-chat'),
         'data-mount' => 'aiwc-inline', 'data-height' => (string) $o['height'],
         'data-theme' => (string) $o['theme'], 'data-scheme' => (string) ($o['scheme'] ?: $chatScheme), 'data-colors' => implode(';', $colors),
         'data-color' => (string) $o['color'], 'data-position' => (string) $o['position'], 'data-voice' => $o['voice'] && $voiceAllowed ? '1' : '0', 'data-rating' => $o['rating'] ? '1' : '0',
@@ -756,10 +756,10 @@ function aiworker_chat_preview(array $o, array $persona, bool $voiceAllowed): vo
     $cfg = wp_json_encode(['option' => AIWORKER_CHAT_OPTION, 'chatScheme' => $chatScheme, 'keys' => AIWORKER_CHAT_COLOR_KEYS, 'autoLang' => $autoLang, 'voiceAllowed' => $voiceAllowed], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     ?>
       <div class="aiwc-preview" data-config="<?php echo esc_attr((string) $cfg); ?>">
-      <h2><?php esc_html_e('Live preview', 'aiworker-chat'); ?></h2>
-      <p class="aiwc-preview__actions"><button type="button" class="button" id="aiwc-open" data-open-label="<?php esc_attr_e('Open the chat window', 'aiworker-chat'); ?>" data-close-label="<?php esc_attr_e('Close the chat window', 'aiworker-chat'); ?>"><?php esc_html_e('Open the chat window', 'aiworker-chat'); ?></button></p>
-      <p><?php echo $persona ? esc_html__('The chat button in the corner of this page is your chat with the look from this form, exactly as visitors will see it on the site. Every change, including the position and the offset, appears at once, before saving.', 'aiworker-chat') : esc_html__('The chat button in the corner of this page shows the look from this form with a sample consultant; after the key is saved it shows your chat\'s name and avatar. Every change, including the position and the offset, appears at once, before saving.', 'aiworker-chat'); ?></p>
-      <div class="aiwc-inline-only aiwc-inline-preview"><p class="description"><?php esc_html_e('«Inside a page block»: this is how the chat stands in the block of a page.', 'aiworker-chat'); ?></p><div id="aiwc-inline"></div></div>
+      <h2><?php esc_html_e('Live preview', 'needtome-ai-chat'); ?></h2>
+      <p class="aiwc-preview__actions"><button type="button" class="button" id="aiwc-open" data-open-label="<?php esc_attr_e('Open the chat window', 'needtome-ai-chat'); ?>" data-close-label="<?php esc_attr_e('Close the chat window', 'needtome-ai-chat'); ?>"><?php esc_html_e('Open the chat window', 'needtome-ai-chat'); ?></button></p>
+      <p><?php echo $persona ? esc_html__('The chat button in the corner of this page is your chat with the look from this form, exactly as visitors will see it on the site. Every change, including the position and the offset, appears at once, before saving.', 'needtome-ai-chat') : esc_html__('The chat button in the corner of this page shows the look from this form with a sample consultant; after the key is saved it shows your chat\'s name and avatar. Every change, including the position and the offset, appears at once, before saving.', 'needtome-ai-chat'); ?></p>
+      <div class="aiwc-inline-only aiwc-inline-preview"><p class="description"><?php esc_html_e('«Inside a page block»: this is how the chat stands in the block of a page.', 'needtome-ai-chat'); ?></p><div id="aiwc-inline"></div></div>
     </div>
     <?php echo wp_get_script_tag($attrs); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_get_script_tag escapes each HTML attribute. ?>
     <script>

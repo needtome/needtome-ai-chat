@@ -133,7 +133,7 @@ function aiworker_chat_kb_text($value): string {
         $parts = array_filter(array_map('aiworker_chat_kb_text', $value), static function ($v) { return $v !== ''; });
         return implode('; ', $parts);
     }
-    if (is_bool($value)) return $value ? __('yes', 'aiworker-chat') : __('no', 'aiworker-chat');
+    if (is_bool($value)) return $value ? __('yes', 'needtome-ai-chat') : __('no', 'needtome-ai-chat');
     return trim(preg_replace('/\s+/u', ' ', wp_strip_all_tags((string) $value)));
 }
 
@@ -386,15 +386,15 @@ function aiworker_chat_kb_can_sync(?array $kb = null): bool {
 function aiworker_chat_kb_request(string $method, string $path, ?array $body = null, int $timeout = 30): array {
     $o = aiworker_chat_options();
     $kb = aiworker_chat_kb_options();
-    if (! aiworker_chat_valid_key((string) $o['key'])) return [0, null, __('The chat key is missing.', 'aiworker-chat')];
+    if (! aiworker_chat_valid_key((string) $o['key'])) return [0, null, __('The chat key is missing.', 'needtome-ai-chat')];
     // a saved sync token (wks_…) as before; otherwise the AI Worker sign-in, whose token kra.name accepts for its account's chats
     $legacy = (string) $kb['token'];
     for ($attempt = 0; $attempt < 2; $attempt++) {
         $bearer = $legacy;
         if ($legacy === '') {
             $bearer = aiworker_chat_oauth_access_token($attempt > 0, $busy);
-            if ($bearer === null) return [0, null, $busy === 'unreachable' ? __('AI Worker cannot be reached right now. The connection is kept; try again in a minute.', 'aiworker-chat') : __('The connection to AI Worker is being renewed. Try again in a few seconds.', 'aiworker-chat')];
-            if ($bearer === '') return [0, null, __('Sign in to AI Worker to send the content to the knowledge base.', 'aiworker-chat')];
+            if ($bearer === null) return [0, null, $busy === 'unreachable' ? __('AI Worker cannot be reached right now. The connection is kept; try again in a minute.', 'needtome-ai-chat') : __('The connection to AI Worker is being renewed. Try again in a few seconds.', 'needtome-ai-chat')];
+            if ($bearer === '') return [0, null, __('Sign in to AI Worker to send the content to the knowledge base.', 'needtome-ai-chat')];
         }
         $args = ['method' => $method, 'timeout' => $timeout, 'redirection' => 0, 'headers' => ['Authorization' => 'Bearer '.$bearer, 'Accept' => 'application/json']];
         if ($body !== null) { $args['headers']['Content-Type'] = 'application/json'; $args['body'] = wp_json_encode($body); }
@@ -542,9 +542,9 @@ function aiworker_chat_kb_send_docs(array $docs, array &$rejected, string $token
 /** Records a failed run and schedules the next attempt (none for a bad token: the owner must enter a new one). */
 function aiworker_chat_kb_fail(string $result, string $message): void {
     if ($result === 'lost') return;   // another worker owns the queue now and continues
-    if ($result === 'auth') { aiworker_chat_kb_state(['last_error' => __('kra.name rejected the sync token: create a new one on the chat\'s card and save it here.', 'aiworker-chat')]); return; }
+    if ($result === 'auth') { aiworker_chat_kb_state(['last_error' => __('kra.name rejected the sync token: create a new one on the chat\'s card and save it here.', 'needtome-ai-chat')]); return; }
     $delay = strpos($result, 'retry:') === 0 ? (int) substr($result, 6) : 15 * MINUTE_IN_SECONDS;
-    aiworker_chat_kb_state(['last_error' => $message !== '' ? $message : __('kra.name is not reachable; the sync will be retried.', 'aiworker-chat')]);
+    aiworker_chat_kb_state(['last_error' => $message !== '' ? $message : __('kra.name is not reachable; the sync will be retried.', 'needtome-ai-chat')]);
     wp_schedule_single_event(time() + $delay, 'aiworker_chat_kb_sync');
 }
 
@@ -693,15 +693,15 @@ function aiworker_chat_kb_tab(): void {
       <div class="aiwc-card aiwc-kb-intro">
         <p class="aiwc-lead"><?php echo wp_kses(sprintf(
             /* translators: %s: link to the chat's knowledge sources at kra.name */
-            __('The consultant\'s knowledge sources (pages of your site, files, Google Sheets and Docs, questions and answers) are set up in the chat\'s settings at %s, card «What the AI answers from». Here you can also send content straight from this site\'s database: it stays up to date by itself whenever you edit the site.', 'aiworker-chat'),
+            __('The consultant\'s knowledge sources (pages of your site, files, Google Sheets and Docs, questions and answers) are set up in the chat\'s settings at %s, card «What the AI answers from». Here you can also send content straight from this site\'s database: it stays up to date by itself whenever you edit the site.', 'needtome-ai-chat'),
             '<a href="'.esc_url(AIWORKER_CHAT_KB_PANEL_URL).'" target="_blank" rel="noopener">kra.name</a>'), ['a' => ['href' => [], 'target' => [], 'rel' => []]]); ?></p>
-        <p class="description"><?php esc_html_e('If you send this site\'s content from here, do not also add the same site as a «Site» source at kra.name (or leave out the sections sent from here): the knowledge base does not merge duplicates, so the same text would take space twice.', 'aiworker-chat'); ?></p>
+        <p class="description"><?php esc_html_e('If you send this site\'s content from here, do not also add the same site as a «Site» source at kra.name (or leave out the sections sent from here): the knowledge base does not merge duplicates, so the same text would take space twice.', 'needtome-ai-chat'); ?></p>
       </div>
       <?php if (function_exists('aiworker_chat_lazy') && (int) get_option(AIWORKER_CHAT_LINKED_OPTION, 0) > 0 && aiworker_chat_is_connected()) { aiworker_chat_lazy('answer', 0, true); aiworker_chat_lazy('sources', 0, true); } ?>
       <form method="post" action="options.php" class="aiwc-main">
         <?php settings_fields('aiworker_chat_kb'); ?>
         <?php aiworker_chat_kb_card(); ?>
-        <div class="aiwc-save"><?php submit_button(__('Save settings', 'aiworker-chat'), 'primary large', 'submit', false); ?></div>
+        <div class="aiwc-save"><?php submit_button(__('Save settings', 'needtome-ai-chat'), 'primary large', 'submit', false); ?></div>
       </form>
     </div>
     <?php
@@ -712,33 +712,33 @@ function aiworker_chat_kb_card(): void {
     $name = esc_attr(AIWORKER_CHAT_KB_OPTION);
     $types = aiworker_chat_kb_post_types();
     $state = aiworker_chat_kb_state();
-    $coreLabels = ['title' => __('Title', 'aiworker-chat'), 'content' => __('Content', 'aiworker-chat'), 'excerpt' => __('Excerpt', 'aiworker-chat')];
+    $coreLabels = ['title' => __('Title', 'needtome-ai-chat'), 'content' => __('Content', 'needtome-ai-chat'), 'excerpt' => __('Excerpt', 'needtome-ai-chat')];
     $box = static function (string $field, string $value, string $label, bool $on): string {
         return '<label class="aiwc-check aiwc-kb__opt"><input type="checkbox" name="'.esc_attr($field).'[]" value="'.esc_attr($value).'" '.checked($on, true, false).'> '.esc_html($label).'</label>';
     };
     ?>
     <section class="aiwc-card" id="aiwc-kb">
-      <h2><?php esc_html_e('Content from this site', 'aiworker-chat'); ?></h2>
-      <p class="aiwc-lead"><?php esc_html_e('Choose the post types and fields the consultant should know. Published posts of these types are sent to the chat\'s knowledge base at kra.name and vectorized there; changes are sent automatically.', 'aiworker-chat'); ?></p>
-      <?php if (sanitize_key(wp_unslash($_GET['aiwc_kb'] ?? '')) === 'queued'): // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only picks the notice shown after the redirect; nothing is changed. ?><div class="notice notice-success inline"><p><?php esc_html_e('Full sync is queued; WordPress runs it in the background with its scheduled tasks (WP-Cron), usually within a minute while the site has visitors.', 'aiworker-chat'); ?></p></div><?php endif; ?>
+      <h2><?php esc_html_e('Content from this site', 'needtome-ai-chat'); ?></h2>
+      <p class="aiwc-lead"><?php esc_html_e('Choose the post types and fields the consultant should know. Published posts of these types are sent to the chat\'s knowledge base at kra.name and vectorized there; changes are sent automatically.', 'needtome-ai-chat'); ?></p>
+      <?php if (sanitize_key(wp_unslash($_GET['aiwc_kb'] ?? '')) === 'queued'): // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only picks the notice shown after the redirect; nothing is changed. ?><div class="notice notice-success inline"><p><?php esc_html_e('Full sync is queued; WordPress runs it in the background with its scheduled tasks (WP-Cron), usually within a minute while the site has visitors.', 'needtome-ai-chat'); ?></p></div><?php endif; ?>
       <?php
       $canSync = aiworker_chat_kb_can_sync($kb);
-      if ($kb['token'] !== '') aiworker_chat_row(__('Sync token', 'aiworker-chat'),
-          '<p>'.esc_html__('A sync token from the kra.name panel is saved and used.', 'aiworker-chat').' <label class="aiwc-check"><input type="checkbox" name="'.$name.'[token_clear]" value="1"> '.esc_html__('Remove', 'aiworker-chat').'</label></p>',
-          esc_html__('Without it the content is sent through the AI Worker sign-in.', 'aiworker-chat'));
-      elseif (! $canSync) aiworker_chat_row(__('AI Worker', 'aiworker-chat'),
-          '<p>'.esc_html__('Sign in to AI Worker to send this site\'s content to the chat\'s knowledge base.', 'aiworker-chat').'</p>'
-          .'<p>'.aiworker_chat_signin_link('kb', __('Sign in to AI Worker', 'aiworker-chat')).'</p>');
-      aiworker_chat_row(__('Sync', 'aiworker-chat'),
-          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[enabled]" value="1" '.checked((bool) $kb['enabled'], true, false).disabled(! $canSync, true, false).'> '.esc_html__('Send the selected content to the chat\'s knowledge base', 'aiworker-chat').'</label>');
+      if ($kb['token'] !== '') aiworker_chat_row(__('Sync token', 'needtome-ai-chat'),
+          '<p>'.esc_html__('A sync token from the kra.name panel is saved and used.', 'needtome-ai-chat').' <label class="aiwc-check"><input type="checkbox" name="'.$name.'[token_clear]" value="1"> '.esc_html__('Remove', 'needtome-ai-chat').'</label></p>',
+          esc_html__('Without it the content is sent through the AI Worker sign-in.', 'needtome-ai-chat'));
+      elseif (! $canSync) aiworker_chat_row(__('AI Worker', 'needtome-ai-chat'),
+          '<p>'.esc_html__('Sign in to AI Worker to send this site\'s content to the chat\'s knowledge base.', 'needtome-ai-chat').'</p>'
+          .'<p>'.aiworker_chat_signin_link('kb', __('Sign in to AI Worker', 'needtome-ai-chat')).'</p>');
+      aiworker_chat_row(__('Sync', 'needtome-ai-chat'),
+          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[enabled]" value="1" '.checked((bool) $kb['enabled'], true, false).disabled(! $canSync, true, false).'> '.esc_html__('Send the selected content to the chat\'s knowledge base', 'needtome-ai-chat').'</label>');
       $defaultLang = aiworker_chat_kb_default_lang();
-      if ($defaultLang !== null) aiworker_chat_row(__('Languages', 'aiworker-chat'),
-          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[all_langs]" value="1" '.checked(! empty($kb['all_langs']), true, false).'> '.esc_html__('Translations differ in content — send every language', 'aiworker-chat').'</label>',
+      if ($defaultLang !== null) aiworker_chat_row(__('Languages', 'needtome-ai-chat'),
+          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[all_langs]" value="1" '.checked(! empty($kb['all_langs']), true, false).'> '.esc_html__('Translations differ in content — send every language', 'needtome-ai-chat').'</label>',
           /* translators: %s: the site's default language code */
-          esc_html(sprintf(__('Off: only the posts in the default language (%s) are sent, each with the addresses of its translations. The chat finds the answer whatever the visitor\'s language and links the page in that language.', 'aiworker-chat'), $defaultLang)));
-      if (aiworker_chat_products_available()) aiworker_chat_row(__('Product catalog', 'aiworker-chat'),
-          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[products]" value="1" '.checked((bool) $kb['products'], true, false).'> '.esc_html__('Send the WooCommerce products to the chat\'s catalog', 'aiworker-chat').'</label>',
-          esc_html__('Prices, sale prices, stock, categories, attributes and variations, so the consultant can pick products by exact characteristics. Products then do not go as separate documents: the «Products» row below chooses which descriptions and extra fields (taxonomies, ACF, custom fields) are added to each product.', 'aiworker-chat'));
+          esc_html(sprintf(__('Off: only the posts in the default language (%s) are sent, each with the addresses of its translations. The chat finds the answer whatever the visitor\'s language and links the page in that language.', 'needtome-ai-chat'), $defaultLang)));
+      if (aiworker_chat_products_available()) aiworker_chat_row(__('Product catalog', 'needtome-ai-chat'),
+          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[products]" value="1" '.checked((bool) $kb['products'], true, false).'> '.esc_html__('Send the WooCommerce products to the chat\'s catalog', 'needtome-ai-chat').'</label>',
+          esc_html__('Prices, sale prices, stock, categories, attributes and variations, so the consultant can pick products by exact characteristics. Products then do not go as separate documents: the «Products» row below chooses which descriptions and extra fields (taxonomies, ACF, custom fields) are added to each product.', 'needtome-ai-chat'));
       ?>
       <div class="aiwc-kb__types">
         <?php foreach ($types as $type => $label):
@@ -747,15 +747,15 @@ function aiworker_chat_kb_card(): void {
             $tax = get_object_taxonomies($type, 'objects'); $acf = aiworker_chat_kb_acf_fields($type); $meta = aiworker_chat_kb_meta_keys($type); ?>
           <details class="aiwc-kb__type"<?php echo $on ? ' open' : ''; ?>>
             <summary><label class="aiwc-check"><input type="checkbox" name="<?php echo esc_attr($field); ?>[on]" value="1" <?php checked($on); ?>> <strong><?php echo esc_html($label); ?></strong></label>
-              <span class="description"><?php echo esc_html(sprintf(/* translators: %d: number of published posts */ _n('%d published', '%d published', $count, 'aiworker-chat'), $count)); ?></span></summary>
+              <span class="description"><?php echo esc_html(sprintf(/* translators: %d: number of published posts */ _n('%d published', '%d published', $count, 'needtome-ai-chat'), $count)); ?></span></summary>
             <div class="aiwc-kb__fields">
-              <div><b><?php esc_html_e('Fields', 'aiworker-chat'); ?></b>
+              <div><b><?php esc_html_e('Fields', 'needtome-ai-chat'); ?></b>
                 <?php foreach ($coreLabels as $k => $l) echo wp_kses($box($field.'[fields]', $k, $l, $on ? in_array($k, (array) $cfg['fields'], true) : $k !== 'excerpt'), aiworker_chat_admin_html_allowed()); ?></div>
-              <?php if ($tax): ?><div><b><?php esc_html_e('Taxonomies', 'aiworker-chat'); ?></b>
+              <?php if ($tax): ?><div><b><?php esc_html_e('Taxonomies', 'needtome-ai-chat'); ?></b>
                 <?php foreach ($tax as $t) if ($t->public || $t->show_ui) echo wp_kses($box($field.'[tax]', $t->name, $t->labels->name, $on && in_array($t->name, (array) $cfg['tax'], true)), aiworker_chat_admin_html_allowed()); ?></div><?php endif; ?>
-              <?php if ($acf): ?><div><b><?php esc_html_e('ACF fields', 'aiworker-chat'); ?></b>
+              <?php if ($acf): ?><div><b><?php esc_html_e('ACF fields', 'needtome-ai-chat'); ?></b>
                 <?php foreach ($acf as $k => $l) echo wp_kses($box($field.'[acf]', $k, $l, $on && in_array($k, (array) $cfg['acf'], true)), aiworker_chat_admin_html_allowed()); ?></div><?php endif; ?>
-              <?php if ($meta): ?><div><b><?php esc_html_e('Custom fields', 'aiworker-chat'); ?></b>
+              <?php if ($meta): ?><div><b><?php esc_html_e('Custom fields', 'needtome-ai-chat'); ?></b>
                 <?php foreach ($meta as $k) echo wp_kses($box($field.'[meta]', $k, $k, $on && in_array($k, (array) $cfg['meta'], true)), aiworker_chat_admin_html_allowed()); ?></div><?php endif; ?>
             </div>
           </details>
@@ -763,22 +763,22 @@ function aiworker_chat_kb_card(): void {
       </div>
       <?php
       // shown on every site, so the owner knows these sources exist; what is found here now is named in the hint
-      echo '<h3 class="aiwc-kb__more">'.esc_html__('Other data of the site', 'aiworker-chat').'</h3>';
+      echo '<h3 class="aiwc-kb__more">'.esc_html__('Other data of the site', 'needtome-ai-chat').'</h3>';
       $areas = array_column(aiworker_chat_kb_widget_areas($kb), 'name');
-      aiworker_chat_row(__('Widgets', 'aiworker-chat'),
-          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[widgets]" value="1" '.checked(! empty($kb['widgets']), true, false).'> '.esc_html__('Send the text of the widgets (sidebars, footer)', 'aiworker-chat').'</label>',
-          esc_html__('Text, Custom HTML and block widgets; each widget area is one document. Lists of posts, menus and very short texts are left out.', 'aiworker-chat').' '
-          .($areas ? esc_html(sprintf(/* translators: %s: names of the widget areas */ __('Found now: %s.', 'aiworker-chat'), implode(', ', $areas)))
-              : esc_html__('No widget with text on this site now: once you add one in Appearance → Widgets, it is sent.', 'aiworker-chat')));
+      aiworker_chat_row(__('Widgets', 'needtome-ai-chat'),
+          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[widgets]" value="1" '.checked(! empty($kb['widgets']), true, false).'> '.esc_html__('Send the text of the widgets (sidebars, footer)', 'needtome-ai-chat').'</label>',
+          esc_html__('Text, Custom HTML and block widgets; each widget area is one document. Lists of posts, menus and very short texts are left out.', 'needtome-ai-chat').' '
+          .($areas ? esc_html(sprintf(/* translators: %s: names of the widget areas */ __('Found now: %s.', 'needtome-ai-chat'), implode(', ', $areas)))
+              : esc_html__('No widget with text on this site now: once you add one in Appearance → Widgets, it is sent.', 'needtome-ai-chat')));
       $acf = function_exists('acf_get_options_pages');
       $optionPages = aiworker_chat_kb_acf_option_pages();
-      aiworker_chat_row(__('ACF options pages', 'aiworker-chat'),
-          '<label class="aiwc-check'.($acf ? '' : ' is-off').'"><input type="checkbox" name="'.$name.'[acf_options]" value="1" '.checked(! empty($kb['acf_options']), true, false).disabled(! $acf && empty($kb['acf_options']), true, false).'> '.esc_html__('Send the fields of the site settings pages', 'aiworker-chat').'</label>',
-          esc_html__('Contacts, opening hours, delivery terms and other data set once for the whole site. Password, file and image fields are not sent.', 'aiworker-chat').' '
-          .(! $acf ? esc_html__('Needs the Advanced Custom Fields plugin with options pages; it is not active on this site.', 'aiworker-chat')
-              : ($optionPages ? esc_html(sprintf(/* translators: %s: names of the ACF options pages */ __('Found now: %s.', 'aiworker-chat'), implode(', ', array_column($optionPages, 'title'))))
-                  : esc_html__('ACF is active, but no options page has fields yet.', 'aiworker-chat'))));
-      echo '<p class="description">'.esc_html__('Field values of the posts themselves (ACF fields, custom fields, taxonomies) are chosen in each post type above.', 'aiworker-chat').'</p>';
+      aiworker_chat_row(__('ACF options pages', 'needtome-ai-chat'),
+          '<label class="aiwc-check'.($acf ? '' : ' is-off').'"><input type="checkbox" name="'.$name.'[acf_options]" value="1" '.checked(! empty($kb['acf_options']), true, false).disabled(! $acf && empty($kb['acf_options']), true, false).'> '.esc_html__('Send the fields of the site settings pages', 'needtome-ai-chat').'</label>',
+          esc_html__('Contacts, opening hours, delivery terms and other data set once for the whole site. Password, file and image fields are not sent.', 'needtome-ai-chat').' '
+          .(! $acf ? esc_html__('Needs the Advanced Custom Fields plugin with options pages; it is not active on this site.', 'needtome-ai-chat')
+              : ($optionPages ? esc_html(sprintf(/* translators: %s: names of the ACF options pages */ __('Found now: %s.', 'needtome-ai-chat'), implode(', ', array_column($optionPages, 'title'))))
+                  : esc_html__('ACF is active, but no options page has fields yet.', 'needtome-ai-chat'))));
+      echo '<p class="description">'.esc_html__('Field values of the posts themselves (ACF fields, custom fields, taxonomies) are chosen in each post type above.', 'needtome-ai-chat').'</p>';
       $waiting = aiworker_chat_kb_queue_read()['ids'];
       $waitingProducts = aiworker_chat_kb_queue_read()['products'];
       foreach (aiworker_chat_kb_inbox() as $entry) {
@@ -788,31 +788,31 @@ function aiworker_chat_kb_card(): void {
       $queued = count(array_unique($waiting));
       $status = '';
       if ($kb['enabled']) {
-          $status = $state['last_sync'] ? sprintf(/* translators: 1: date, 2: sent count, 3: removed count */ __('Last sync: %1$s. Sent: %2$d, removed: %3$d.', 'aiworker-chat'), wp_date(get_option('date_format').' '.get_option('time_format'), (int) $state['last_sync']), (int) $state['sent'], (int) $state['deleted']) : __('Not synced yet.', 'aiworker-chat');
-          if ($queued) $status .= ' '.sprintf(/* translators: %d: posts waiting */ _n('%d post is waiting to be sent.', '%d posts are waiting to be sent.', $queued, 'aiworker-chat'), $queued);
-          if ($state['last_error'] !== '') $status .= ' '.sprintf(/* translators: %s: error */ __('Last error: %s', 'aiworker-chat'), $state['last_error']);
+          $status = $state['last_sync'] ? sprintf(/* translators: 1: date, 2: sent count, 3: removed count */ __('Last sync: %1$s. Sent: %2$d, removed: %3$d.', 'needtome-ai-chat'), wp_date(get_option('date_format').' '.get_option('time_format'), (int) $state['last_sync']), (int) $state['sent'], (int) $state['deleted']) : __('Not synced yet.', 'needtome-ai-chat');
+          if ($queued) $status .= ' '.sprintf(/* translators: %d: posts waiting */ _n('%d post is waiting to be sent.', '%d posts are waiting to be sent.', $queued, 'needtome-ai-chat'), $queued);
+          if ($state['last_error'] !== '') $status .= ' '.sprintf(/* translators: %s: error */ __('Last error: %s', 'needtome-ai-chat'), $state['last_error']);
           $rejectedCount = count((array) ($state['rejected'] ?? []));
-          if ($rejectedCount) $status .= ' '.sprintf(/* translators: 1: number of posts, 2: reasons */ __('Not accepted by kra.name: %1$d (%2$s).', 'aiworker-chat'), $rejectedCount, implode(', ', array_unique(array_values((array) $state['rejected']))));
+          if ($rejectedCount) $status .= ' '.sprintf(/* translators: 1: number of posts, 2: reasons */ __('Not accepted by kra.name: %1$d (%2$s).', 'needtome-ai-chat'), $rejectedCount, implode(', ', array_unique(array_values((array) $state['rejected']))));
           $truncatedCount = count((array) ($state['truncated'] ?? []));
-          if ($truncatedCount) $status .= ' '.sprintf(/* translators: %d: number of posts */ __('Sent without their end, longer than the knowledge base takes: %d.', 'aiworker-chat'), $truncatedCount);
+          if ($truncatedCount) $status .= ' '.sprintf(/* translators: %d: number of posts */ __('Sent without their end, longer than the knowledge base takes: %d.', 'needtome-ai-chat'), $truncatedCount);
           $remote = $canSync ? aiworker_chat_kb_remote_status() : null;
           if ($remote && ! empty($remote['ok'])) {
               $indexing = (array) ($remote['indexing'] ?? []);
-              $status .= ' '.sprintf(/* translators: 1: documents, 2: characters, 3: vector state, 4: embedded chunks, 5: all chunks */ __('In the chat\'s knowledge base: %1$d documents, %2$s characters; vectors: %3$s (%4$d of %5$d parts).', 'aiworker-chat'),
+              $status .= ' '.sprintf(/* translators: 1: documents, 2: characters, 3: vector state, 4: embedded chunks, 5: all chunks */ __('In the chat\'s knowledge base: %1$d documents, %2$s characters; vectors: %3$s (%4$d of %5$d parts).', 'needtome-ai-chat'),
                   (int) ($remote['docs'] ?? 0), number_format_i18n((int) ($remote['chars'] ?? 0)), (string) ($indexing['state'] ?? '—'), (int) ($indexing['embedded'] ?? 0), (int) ($indexing['chunks'] ?? 0));
-              if (! empty($indexing['dropped'])) $status .= ' '.sprintf(/* translators: %d: parts over the plan limit */ __('%d parts are over the plan\'s knowledge limit and are not used.', 'aiworker-chat'), (int) $indexing['dropped']);
+              if (! empty($indexing['dropped'])) $status .= ' '.sprintf(/* translators: %d: parts over the plan limit */ _n('%d part is over the plan\'s knowledge limit and is not used.', '%d parts are over the plan\'s knowledge limit and are not used.', (int) $indexing['dropped'], 'needtome-ai-chat'), (int) $indexing['dropped']);
           }
           $catalogStatus = $canSync ? aiworker_chat_products_status_text($kb, $state, count(array_unique($waitingProducts))) : '';
           if ($catalogStatus !== '') $status .= ' '.$catalogStatus;
       }
       $syncUrl = wp_nonce_url(admin_url('admin-post.php?action=aiwc_kb_sync'), 'aiwc_kb_sync');
-      aiworker_chat_row(__('Status', 'aiworker-chat'), '<p>'.esc_html($status ?: __('Sync is off.', 'aiworker-chat')).'</p>'
-          .'<p><button type="button" class="button aiwc-kb__preview-open">'.esc_html__('Preview what will be sent', 'aiworker-chat').'</button> '
-          .($kb['enabled'] ? '<a class="button" href="'.esc_url($syncUrl).'">'.esc_html__('Sync everything now', 'aiworker-chat').'</a>' : '').'</p>');
+      aiworker_chat_row(__('Status', 'needtome-ai-chat'), '<p>'.esc_html($status ?: __('Sync is off.', 'needtome-ai-chat')).'</p>'
+          .'<p><button type="button" class="button aiwc-kb__preview-open">'.esc_html__('Preview what will be sent', 'needtome-ai-chat').'</button> '
+          .($kb['enabled'] ? '<a class="button" href="'.esc_url($syncUrl).'">'.esc_html__('Sync everything now', 'needtome-ai-chat').'</a>' : '').'</p>');
       ?>
       <dialog class="aiwc-modal" id="aiwc-kb-preview" aria-labelledby="aiwc-kb-preview-title">
-        <div class="aiwc-modal__head"><h2 id="aiwc-kb-preview-title"><?php esc_html_e('What will be sent to the knowledge base', 'aiworker-chat'); ?></h2>
-          <button type="button" class="aiwc-modal__close" aria-label="<?php esc_attr_e('Close', 'aiworker-chat'); ?>">&times;</button></div>
+        <div class="aiwc-modal__head"><h2 id="aiwc-kb-preview-title"><?php esc_html_e('What will be sent to the knowledge base', 'needtome-ai-chat'); ?></h2>
+          <button type="button" class="aiwc-modal__close" aria-label="<?php esc_attr_e('Close', 'needtome-ai-chat'); ?>">&times;</button></div>
         <div class="aiwc-modal__body" aria-live="polite"></div>
       </dialog>
       <?php aiworker_chat_kb_preview_script(); ?>
@@ -836,7 +836,7 @@ add_action('wp_ajax_aiwc_kb_preview', 'aiworker_chat_kb_preview_ajax');
 
 /** Opens the preview popup with the knowledge-base fields of the settings form. */
 function aiworker_chat_kb_preview_script(): void {
-    $data = ['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_kb_preview'), 'field' => AIWORKER_CHAT_KB_OPTION.'[', 'loading' => __('Loading…', 'aiworker-chat'), 'failed' => __('The preview could not be loaded. Try again.', 'aiworker-chat')];
+    $data = ['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_kb_preview'), 'field' => AIWORKER_CHAT_KB_OPTION.'[', 'loading' => __('Loading…', 'needtome-ai-chat'), 'failed' => __('The preview could not be loaded. Try again.', 'needtome-ai-chat')];
     ?>
     <script>
     (function () {
@@ -863,14 +863,14 @@ function aiworker_chat_kb_preview_script(): void {
 /** Shows the first documents with the given settings, so the selection can be checked before saving and syncing; a long post goes in parts of this text. */
 function aiworker_chat_kb_preview(array $kb): void {
     $ids = aiworker_chat_kb_all_ids($kb);
-    echo '<div class="aiwc-kb__preview"><p><strong>'.esc_html(sprintf(/* translators: %d: number of posts */ _n('%d post matches the selection.', '%d posts match the selection.', count($ids), 'aiworker-chat'), count($ids))).'</strong> '
-        .esc_html__('The first three documents with the choice above, even before it is saved; a long post is sent in parts of this text:', 'aiworker-chat').'</p>';
+    echo '<div class="aiwc-kb__preview"><p><strong>'.esc_html(sprintf(/* translators: %d: number of posts */ _n('%d post matches the selection.', '%d posts match the selection.', count($ids), 'needtome-ai-chat'), count($ids))).'</strong> '
+        .esc_html__('The first three documents with the choice above, even before it is saved; a long post is sent in parts of this text:', 'needtome-ai-chat').'</p>';
     foreach (aiworker_chat_kb_site_docs($kb) as $doc) echo '<details><summary>'.esc_html($doc['title']).'</summary><pre>'.esc_html(wp_json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)).'</pre></details>';
     foreach (array_slice($ids, 0, 3) as $id) {
         $doc = aiworker_chat_kb_document(get_post($id), $kb);
         if (! $doc) continue;
         $parts = aiworker_chat_kb_parts($doc, $truncated);
-        $note = $truncated ? '<p class="description">'.esc_html(sprintf(/* translators: %d: number of parts */ __('This post is longer than the knowledge base takes: only its first %d parts are sent.', 'aiworker-chat'), count($parts))).'</p>' : '';
+        $note = $truncated ? '<p class="description">'.esc_html(sprintf(/* translators: %d: number of parts */ _n('This post is longer than the knowledge base takes: only its first %d part is sent.', 'This post is longer than the knowledge base takes: only its first %d parts are sent.', count($parts), 'needtome-ai-chat'), count($parts))).'</p>' : '';
         unset($parts);
         echo '<details><summary>'.esc_html($doc['title'].' — '.$doc['url']).'</summary>'.$note.'<pre>'.esc_html(wp_json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)).'</pre></details>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $note is built from escaped text.
     }
