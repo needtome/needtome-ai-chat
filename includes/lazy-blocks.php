@@ -79,7 +79,7 @@ add_action('wp_ajax_aiwc_lazy', 'aiworker_chat_lazy_ajax');
 function aiworker_chat_lazy_script(): void {
     $data = ['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_lazy'), 'failed' => __('kra.name did not answer. Reload the page to try again.', 'needtome-ai-chat'), 'loading' => __('Loading from kra.name…', 'needtome-ai-chat'), 'lang' => aiworker_chat_wizard_lang()];
     ?>
-    <script>
+    <?php ob_start(); ?>
     (function (c) {
       // a block that changed something at kra.name reloads itself: aiwcLazyReload(itsElement, 'name')
       window.aiwcLazyReload = function (el, block) {
@@ -111,6 +111,6 @@ function aiworker_chat_lazy_script(): void {
         });
       }
     })(<?php echo wp_json_encode($data); ?>);
-    </script>
+    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
     <?php
 }

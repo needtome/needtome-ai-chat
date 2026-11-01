@@ -308,7 +308,7 @@ function aiworker_chat_wizard_block(bool $collapsed = false): void {
         </div>
       </div>
       </div>
-      <script>
+      <?php ob_start(); ?>
       (function (root) {
         var fold = root.querySelector('.aiwc-aw__fold');
         function setOpen(open) {
@@ -332,7 +332,7 @@ function aiworker_chat_wizard_block(bool $collapsed = false): void {
           });
         });
       })(document.getElementById('aiwc-wizard'));
-      </script>
+      <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
     </div>
     <?php aiworker_chat_assistant_styles(); ?>
     <?php
@@ -363,7 +363,7 @@ function aiworker_chat_assistant_tab(): void {
 
 function aiworker_chat_assistant_styles(): void {
     ?>
-    <style>
+    <?php ob_start(); ?>
       .aiwc-aw#aiwc-wizard{border:1px solid #dcdcde;border-radius:12px;background:#fff;padding:0 18px 18px;margin:18px 0}.aiwc-aw__fold{margin-left:auto;align-self:center;display:inline-flex;align-items:center;gap:6px;border:0;background:none;color:#2271b1;font:inherit;font-size:13px;cursor:pointer;padding:8px 4px}.aiwc-aw__fold i{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:6px solid currentColor;transition:transform .15s}.aiwc-aw.is-collapsed .aiwc-aw__fold i{transform:rotate(180deg)}.aiwc-aw.is-collapsed{padding-bottom:0!important}.aiwc-aw.is-collapsed .aiwc-aw__pane{display:none}.aiwc-aw.is-collapsed .aiwc-aw__tabs{margin-bottom:0;border-bottom:0}.aiwc-aw.is-collapsed .aiwc-aw__tab.is-active{color:#50575e;border-bottom-color:transparent}.aiwc-aw__tabs{display:flex;gap:4px;border-bottom:1px solid #dcdcde;margin:0 -18px 14px;padding:0 12px}.aiwc-aw__tab{border:0;background:none;padding:12px 12px 10px;font:inherit;font-size:14px;font-weight:600;color:#50575e;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}.aiwc-aw__tab:hover{color:#1d2327}.aiwc-aw__tab.is-active{color:#3858e9;border-bottom-color:#3858e9}.aiwc-aw__pane .aiwc-main{display:block}.aiwc-aw__pane .aiwc-card{border:0;box-shadow:none;background:none;padding:0;margin:0}.aiwc-aw__pane .aiwc-card h2{font-size:15px;margin:0 0 8px}.aiwc-aw__bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0}.aiwc-aw__account{color:#50575e}.aiwc-aw h3{margin:8px 0 4px}
       .aiwc-aw__grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:18px;align-items:start}
       .aiwc-aw__log{max-height:460px;overflow:auto;display:flex;flex-direction:column;gap:10px;padding:4px 2px 10px}
@@ -379,6 +379,6 @@ function aiworker_chat_assistant_styles(): void {
       .aiwc-aw__chart{width:100%;height:auto;max-height:200px;margin:6px 0 10px}.aiwc-aw__legend{font-size:12px;color:#50575e}.aiwc-aw__legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px}
       .aiwc-aw table{width:100%}.aiwc-aw h2 select{margin-left:auto;font-weight:400}
       @media (max-width:1100px){.aiwc-aw__grid{grid-template-columns:minmax(0,1fr)}}
-    </style>
+    <?php aiworker_chat_print_style('aiworker-chat-assistant', (string) ob_get_clean()); ?>
     <?php
 }

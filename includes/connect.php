@@ -121,6 +121,9 @@ function aiworker_chat_oauth_client_id(): string {
         'response_types' => ['code'],
         'token_endpoint_auth_method' => 'none',
         'scope' => 'chat',
+        // kra.name counts its CMS plugins by platform and version
+        'software_id' => 'needtome-ai-chat-wordpress',
+        'software_version' => AIWORKER_CHAT_VERSION,
     ], true);
     if (empty($result['body']['client_id']) || ! in_array($result['code'], [200, 201], true)) return '';
     $state['client_id'] = (string) $result['body']['client_id'];
@@ -428,7 +431,7 @@ function aiworker_chat_api(string $method, string $path, array $body = [], int $
     if (is_array($stub)) return $stub + ['code' => 200, 'body' => [], 'error' => ''];
     if ($method === 'GET') {
         $ready = aiworker_chat_api_prefetched(aiworker_chat_api_get_url($path, $body));
-        if ($ready) return $ready;
+        if ($ready) return aiworker_chat_widget_version_seen($ready);
     }
 
     for ($attempt = 0; $attempt < 2; $attempt++) {
@@ -451,7 +454,19 @@ function aiworker_chat_api(string $method, string $path, array $body = [], int $
         $code = (int) wp_remote_retrieve_response_code($response);
         if ($code === 401 && $attempt === 0) continue;
         $data = json_decode((string) wp_remote_retrieve_body($response), true);
-        return ['code' => $code, 'body' => is_array($data) ? $data : [], 'error' => ''];
+        return aiworker_chat_widget_version_seen(['code' => $code, 'body' => is_array($data) ? $data : [], 'error' => '']);
     }
     return ['code' => 401, 'body' => [], 'error' => 'not_connected'];
+}
+
+/**
+ * /plugin/me and /plugin/chat name the current widget build; visitors load widget.js?v=<it>, so an update reaches them
+ * at once and the browser cache holds otherwise (loader.js falls back to a daily version until one is known).
+ */
+function aiworker_chat_widget_version_seen(array $result): array {
+    $v = $result['body']['widget_version'] ?? null;
+    if ($result['code'] === 200 && (is_string($v) || is_int($v)) && preg_match('/^[A-Za-z0-9._-]{1,40}$/', (string) $v) && get_option('aiworker_chat_widget_version') !== (string) $v) {
+        update_option('aiworker_chat_widget_version', (string) $v, true);
+    }
+    return $result;
 }

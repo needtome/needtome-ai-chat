@@ -101,7 +101,7 @@ function aiworker_chat_mcp_tab(bool $embedded = false): void {
           '<a href="'.esc_url(aiworker_chat_integrations_url('connect')).'" target="_blank" rel="noopener">'.esc_html__('kra.name integrations', 'needtome-ai-chat').'</a>'), $link); ?></p>
     </section>
     </div>
-    <script>
+    <?php ob_start(); ?>
     // «Copy»: the text field just before the button; the button says it was copied
     document.querySelectorAll('#aiwc-mcp [data-copy-prev]').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -110,7 +110,7 @@ function aiworker_chat_mcp_tab(bool $embedded = false): void {
         else { f.select(); document.execCommand('copy'); done(); }
       });
     });
-    </script>
+    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
     <?php
 }
 

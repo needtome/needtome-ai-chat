@@ -838,7 +838,7 @@ add_action('wp_ajax_aiwc_kb_preview', 'aiworker_chat_kb_preview_ajax');
 function aiworker_chat_kb_preview_script(): void {
     $data = ['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_kb_preview'), 'field' => AIWORKER_CHAT_KB_OPTION.'[', 'loading' => __('Loading…', 'needtome-ai-chat'), 'failed' => __('The preview could not be loaded. Try again.', 'needtome-ai-chat')];
     ?>
-    <script>
+    <?php ob_start(); ?>
     (function () {
       var c = <?php echo wp_json_encode($data); ?>, dlg = document.getElementById('aiwc-kb-preview'), body = dlg.querySelector('.aiwc-modal__body');
       dlg.querySelector('.aiwc-modal__close').addEventListener('click', function () { dlg.close(); });
@@ -856,7 +856,7 @@ function aiworker_chat_kb_preview_script(): void {
         }).catch(function () { body.textContent = c.failed; });
       });
     })();
-    </script>
+    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
     <?php
 }
 

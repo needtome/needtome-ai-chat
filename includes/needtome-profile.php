@@ -25,7 +25,7 @@ if (! class_exists('Aiworker_Chat_Profile')) {
                 'needtome-phone-number-switcher' => ['name' => 'NeedToMe Phone Number Switcher', 'text' => __('Shows a separate phone number for each advertising campaign and updates click-to-call links.', 'needtome-ai-chat'),
                     'demo' => 'https://needtome.com/needtome-phone-number-switcher/', 'wporg' => 'https://wordpress.org/plugins/needtome-phone-number-switcher/', 'zip' => '', 'page' => 'needtome-phone-number-switcher'],
                 'needtome-ai-chat' => ['name' => 'NeedToMe AI Chat', 'text' => __('AI chat for your website, connected to AI Worker (kra.name).', 'needtome-ai-chat'),
-                    'demo' => 'https://needtome.com/needtome-ai-chat/', 'wporg' => '', 'zip' => 'https://kra.name/app/aiworker-chat.zip', 'page' => 'aiworker-chat'],
+                    'demo' => 'https://needtome.com/needtome-ai-chat/', 'wporg' => '', 'zip' => 'https://kra.name/app/needtome-ai-chat.zip', 'page' => 'aiworker-chat'],
             ];
         }
 
@@ -238,7 +238,7 @@ if (! class_exists('Aiworker_Chat_Profile')) {
             $done = true;
             do_action('ntm_profile_styles'); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- One hook shared by every NeedToMe plugin, so their common styles print once.
             ?>
-            <style>
+            <?php ob_start(); ?>
             .ntm-support{position:relative;overflow:hidden;margin-top:24px;padding:13px;background:linear-gradient(135deg,#fff8d9 0%,#fff3b0 46%,#e8f5ff 100%);border:1px solid #f0cc58;border-radius:16px;box-shadow:0 10px 24px rgba(188,155,48,.15)}
             .ntm-support__hero{display:flex;align-items:center;gap:22px;margin-bottom:12px}
             .ntm-support__visual{flex:0 0 124px;width:124px;height:124px;display:flex;align-items:center;justify-content:center;border-radius:28px;background:radial-gradient(circle at 30% 30%,#fff 0%,#eff9ff 48%,#d8eeff 100%);box-shadow:0 16px 30px rgba(80,141,199,.22)}
@@ -261,8 +261,11 @@ if (! class_exists('Aiworker_Chat_Profile')) {
             .ntm-profile table.widefat{max-width:1100px}
             @media screen and (max-width:700px){.ntm-support__hero{flex-direction:column;align-items:flex-start;gap:14px}.ntm-support__visual{width:108px;height:108px;flex-basis:108px}.ntm-support__icon{width:76px;height:76px}.ntm-profile__services{columns:1}}
             @media screen and (max-width:500px){.ntm-profile{flex-direction:column}.ntm-profile__contacts{flex:1 0 auto;width:100%;box-sizing:border-box;box-shadow:none}}
-            </style>
             <?php
+            // through the WordPress style API (a registered handle with inline CSS), not a hand-written <style> tag
+            wp_register_style('ntm-profile', false, [], '1');
+            wp_add_inline_style('ntm-profile', trim(wp_strip_all_tags((string) ob_get_clean())));
+            wp_print_styles('ntm-profile');
         }
     }
 }

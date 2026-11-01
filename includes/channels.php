@@ -103,7 +103,7 @@ function aiworker_chat_channels_block(): void {
         </div>
       <?php $first = false; endforeach; ?>
     </div>
-    <script>
+    <?php ob_start(); ?>
     (function () {
       var root = document.currentScript.previousElementSibling;
       root.querySelectorAll('.aiwc-channels__tab').forEach(function (tab) {
@@ -116,6 +116,6 @@ function aiworker_chat_channels_block(): void {
         });
       });
     })();
-    </script>
+    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
     <?php
 }

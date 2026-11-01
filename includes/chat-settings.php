@@ -30,6 +30,7 @@ function aiworker_chat_remote_chat_save(): void {
     if (isset($raw['default_lang'])) $out['default_lang'] = sanitize_key((string) $raw['default_lang']);
     foreach (['leads_enabled', 'use_company_knowledge', 'ai_notice', 'greet_popup'] as $k) if (isset($raw[$k])) $out[$k] = (bool) $raw[$k];
     if (isset($raw['knowledge_mode'])) $out['knowledge_mode'] = sanitize_key((string) $raw['knowledge_mode']);
+    if (isset($raw['launcher_icon'])) $out['launcher_icon'] = sanitize_key((string) $raw['launcher_icon']);
     foreach ((array) ($raw['texts'] ?? []) as $lang => $texts) {
         $lang = sanitize_key((string) $lang);
         if ($lang === '' || ! is_array($texts)) continue;
@@ -66,8 +67,19 @@ function aiworker_chat_remote_chat_tool(): void {
     $q = '?chat_id='.$chat.'&lang='.aiworker_chat_wizard_lang();
     $op = isset($_POST['op']) ? sanitize_key(wp_unslash((string) $_POST['op'])) : '';
     if ($op === 'test') $result = aiworker_chat_api('POST', '/plugin/chat/leads/test'.$q, [], 60);
+    elseif ($op === 'icon_delete') $result = aiworker_chat_api('DELETE', '/plugin/chat/launcher-icon'.$q, [], 30);
+    elseif ($op === 'icon_upload') {
+        $file = $_FILES['file'] ?? null; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- An uploaded file: its type and size are checked below and kra.name decodes it.
+        $type = is_array($file) && is_uploaded_file((string) $file['tmp_name']) ? (string) wp_check_filetype_and_ext((string) $file['tmp_name'], (string) $file['name'], ['png' => 'image/png', 'jpg|jpeg' => 'image/jpeg', 'webp' => 'image/webp'])['type'] : '';
+        if ($type === '' || (int) $file['size'] > MB_IN_BYTES) wp_send_json(['code' => 422, 'body' => ['message' => __('Choose a PNG, JPEG or WebP image up to 1 MB.', 'needtome-ai-chat')], 'error' => '']);
+        $boundary = 'aiwc'.wp_generate_password(24, false);
+        $data = '--'.$boundary."\r\n".'Content-Disposition: form-data; name="file"; filename="icon.'.(['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/webp' => 'webp'][$type]).'"'."\r\n"
+            .'Content-Type: '.$type."\r\n\r\n".file_get_contents((string) $file['tmp_name'])."\r\n--".$boundary."--\r\n"; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- A local uploaded file.
+        $result = aiworker_chat_api('POST', '/plugin/chat/launcher-icon'.$q, [], 60, ['type' => 'multipart/form-data; boundary='.$boundary, 'data' => $data]);
+    }
     elseif ($op === 'translate') $result = aiworker_chat_api('POST', '/plugin/chat/translate'.$q, ['source_language' => isset($_POST['source']) ? sanitize_key(wp_unslash((string) $_POST['source'])) : ''], 90);
     else wp_send_json(['code' => 400, 'body' => []], 400);
+    if (strpos($op, 'icon_') === 0 && $result['code'] === 200) delete_transient('aiworker_chat_check'); // the preview reads the icon from the check
     wp_send_json(['code' => $result['code'], 'body' => $result['body'], 'error' => $result['error'] !== '' ? __('kra.name cannot be reached from this site.', 'needtome-ai-chat') : '']);
 }
 add_action('wp_ajax_aiwc_chat_tool', 'aiworker_chat_remote_chat_tool');
@@ -148,6 +160,19 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
           <span class="description"><?php esc_html_e('when the page\'s language is not one of the chat\'s', 'needtome-ai-chat'); ?></span></p>
         <?php endif; ?>
       </div></div>
+      <?php $icons = array_filter((array) ($data['options']['launcher_icons'] ?? []), 'is_array'); if ($icons) : $icon = (string) ($chat['launcher_icon'] ?? 'chat'); $iconUrl = (string) ($chat['launcher_icon_url'] ?? ''); ?>
+      <div class="aiwc-row"><div class="aiwc-row__label"><?php esc_html_e('Chat button icon', 'needtome-ai-chat'); ?></div><div class="aiwc-row__control">
+        <div class="aiwc-icons" role="radiogroup" aria-label="<?php esc_attr_e('Chat button icon', 'needtome-ai-chat'); ?>">
+          <?php foreach ($icons as $ic) : $v = sanitize_key((string) ($ic['value'] ?? '')); if ($v === '') continue; ?>
+          <label class="aiwc-icon" title="<?php echo esc_attr((string) ($ic['label'] ?? $v)); ?>"><input type="radio" name="<?php echo esc_attr($id); ?>_launcher_icon" value="<?php echo esc_attr($v); ?>" data-cs-field="launcher_icon"<?php checked($v, $icon); ?>><span class="aiwc-icon__face" aria-hidden="true"><?php echo wp_kses((string) ($ic['svg'] ?? ''), aiworker_chat_svg_kses()); ?></span><span class="screen-reader-text"><?php echo esc_html((string) ($ic['label'] ?? $v)); ?></span></label>
+          <?php endforeach; ?>
+          <label class="aiwc-icon" data-cs="icon-custom" title="<?php esc_attr_e('Your image', 'needtome-ai-chat'); ?>"<?php echo $iconUrl === '' ? ' hidden' : ''; ?>><input type="radio" name="<?php echo esc_attr($id); ?>_launcher_icon" value="custom" data-cs-field="launcher_icon" data-url="<?php echo esc_url($iconUrl); ?>"<?php checked('custom', $icon); ?>><span class="aiwc-icon__face aiwc-icon__face--img" aria-hidden="true"><img src="<?php echo esc_url($iconUrl); ?>" alt=""></span><span class="screen-reader-text"><?php esc_html_e('Your image', 'needtome-ai-chat'); ?></span></label>
+        </div>
+        <p class="aiwc-icons__own"><label class="button"><input type="file" accept="image/png,image/jpeg,image/webp" data-cs="icon-file" hidden> <?php esc_html_e('Upload your own', 'needtome-ai-chat'); ?></label>
+          <button type="button" class="button-link button-link-delete" data-cs="icon-delete"<?php echo $iconUrl === '' ? ' hidden' : ''; ?>><?php esc_html_e('Remove your image', 'needtome-ai-chat'); ?></button>
+          <span class="description" data-cs="icon-status" role="status"><?php esc_html_e('PNG, JPEG or WebP up to 1 MB; it is cropped to a square. It is uploaded to kra.name at once.', 'needtome-ai-chat'); ?></span></p>
+      </div></div>
+      <?php endif; ?>
       <div class="aiwc-row"><div class="aiwc-row__label"><?php esc_html_e('In the chat', 'needtome-ai-chat'); ?></div><div class="aiwc-row__control">
         <label class="aiwc-check"><input type="checkbox" data-cs-field="ai_notice"<?php checked(($chat['ai_notice'] ?? true) !== false); ?>> <span><?php esc_html_e('Say that an AI answers and its answers may be inaccurate', 'needtome-ai-chat'); ?></span></label>
         <p class="description"><?php esc_html_e('A short note under the chat\'s input: an AI assistant answers, answers may be inaccurate, check what matters with the staff. It lowers the risk of claims over a wrong answer; we recommend keeping it on.', 'needtome-ai-chat'); ?></p>
@@ -170,8 +195,9 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
             <?php endforeach; ?>
           </div>
           <?php
-          // an empty email field sends to the owner's email: kra.name names it in the fallback line, the field shows it greyed out
-          $ownerEmail = preg_match('/[^\s:<>]+@[^\s<>]+\.[a-z]{2,}/i', (string) ($ld['fallback'] ?? ''), $em) ? sanitize_email($em[0]) : '';
+          // an empty email field sends to the owner's email, which the field shows greyed out (older kra.name only named it in the fallback line)
+          $ownerEmail = sanitize_email((string) ($ld['owner_email'] ?? ''));
+          if ($ownerEmail === '' && preg_match('/[^\s:<>]+@[^\s<>]+\.[a-z]{2,}/i', (string) ($ld['fallback'] ?? ''), $em)) $ownerEmail = sanitize_email($em[0]);
           ?>
           <?php foreach ((array) ($ld['channels'] ?? []) as $chn) : if (! is_array($chn)) continue; $type = (string) $chn['type']; $connect = (string) ($chn['connect_url'] ?? ''); ?>
             <div class="aiwc-ld__fields" data-ld-fields="<?php echo esc_attr($type); ?>"<?php echo empty($chn['selected']) ? ' hidden' : ''; ?>>
@@ -218,7 +244,7 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
       </p>
     </section>
     <?php if ($script) return; $script = true; ?>
-    <script>
+    <?php ob_start(); ?>
     document.querySelectorAll('.aiwc-chatset').forEach(function (root) {
       // the wizard's script config (nonce, admin-ajax) is printed in the footer, after this block: read it on click
       var t = <?php echo wp_json_encode([
@@ -229,6 +255,9 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
           'testing' => __('Sending a test message…', 'needtome-ai-chat'), 'noChannels' => __('Delivery is off or no channel is saved yet.', 'needtome-ai-chat'),
           'translating' => __('Translating…', 'needtome-ai-chat'), 'translated' => __('The empty fields are filled with the translation. Check them and press «Save settings».', 'needtome-ai-chat'),
           'nothingToTranslate' => __('Nothing to translate: the fields of the other languages are filled already.', 'needtome-ai-chat'),
+          'iconUploading' => __('Uploading…', 'needtome-ai-chat'), 'iconRemoving' => __('Removing…', 'needtome-ai-chat'),
+          'iconUploaded' => __('Your image is uploaded to kra.name and chosen as the icon.', 'needtome-ai-chat'), 'iconRemoved' => __('Your image is removed; the standard icon is back.', 'needtome-ai-chat'),
+          'iconBad' => __('Choose a PNG, JPEG or WebP image up to 1 MB.', 'needtome-ai-chat'),
       ]); ?>;
       var updated = root.getAttribute('data-updated'), status = root.querySelector('[data-cs="status"]');
       var notice = root.querySelector('[data-cs="notice"]');
@@ -288,6 +317,24 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
         Object.keys(extra || {}).forEach(function (k) { data.append(k, extra[k]); });
         return fetch(c.ajax, { method: 'POST', body: data, credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return { code: 0, body: {} }; });
       }
+      // the chat button icon: ready ones are saved with the other fields; an own image is uploaded (or removed) at once
+      var iconFile = root.querySelector('[data-cs="icon-file"]'), iconDel = root.querySelector('[data-cs="icon-delete"]'), iconStatus = root.querySelector('[data-cs="icon-status"]'), custom = root.querySelector('[data-cs="icon-custom"]');
+      var iconDone = function (res, uploaded) {
+        var body = res.body || {};
+        if (res.code !== 200) { iconStatus.textContent = body.message || (body.errors && body.errors.file && body.errors.file[0]) || res.error || t.failed; iconStatus.classList.add('aiwc-chatset__err'); return; }
+        iconStatus.classList.remove('aiwc-chatset__err'); iconStatus.textContent = uploaded ? t.iconUploaded : t.iconRemoved;
+        var radio = custom.querySelector('input'); radio.setAttribute('data-url', body.launcher_icon_url || ''); custom.querySelector('img').src = body.launcher_icon_url || '';
+        custom.hidden = !uploaded; iconDel.hidden = !uploaded;
+        var pick = root.querySelector('[data-cs-field="launcher_icon"][value="' + (body.launcher_icon || 'chat') + '"]'); if (pick) pick.checked = true;
+        if (body.updated_at) updated = body.updated_at; initial.launcher_icon = body.launcher_icon || 'chat';
+        if (window.aiwcPreviewPush) window.aiwcPreviewPush();
+      };
+      if (iconFile) iconFile.addEventListener('change', function () {
+        var f = iconFile.files[0]; if (!f) return;
+        if (f.size > 1048576 || !/^image\/(png|jpeg|webp)$/.test(f.type)) { iconDone({ code: 422, body: { message: t.iconBad } }); iconFile.value = ''; return; }
+        iconStatus.textContent = t.iconUploading; tool('icon_upload', { file: f }).then(function (res) { iconFile.value = ''; iconDone(res, true); });
+      });
+      if (iconDel) iconDel.addEventListener('click', function () { iconStatus.textContent = t.iconRemoving; tool('icon_delete').then(function (res) { iconDone(res, false); }); });
       var test = root.querySelector('[data-cs="test"]');
       if (test) test.addEventListener('click', function () {
         var list = root.querySelector('[data-cs="results"]'); test.disabled = true; list.hidden = false; list.textContent = t.testing;
@@ -376,6 +423,17 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
         }).catch(function () { stop(null); });
       }, true);
     }
-    </script>
+    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
     <?php
+}
+
+/** What the ready launcher icons from kra.name may contain: plain SVG shapes, no scripts, links or styles. */
+function aiworker_chat_svg_kses(): array {
+    $common = ['fill' => true, 'stroke' => true, 'stroke-width' => true, 'stroke-linecap' => true, 'stroke-linejoin' => true, 'transform' => true, 'opacity' => true];
+    return [
+        'svg' => ['viewbox' => true, 'xmlns' => true, 'width' => true, 'height' => true, 'aria-hidden' => true, 'focusable' => true] + $common,
+        'g' => $common, 'path' => ['d' => true] + $common, 'circle' => ['cx' => true, 'cy' => true, 'r' => true] + $common,
+        'ellipse' => ['cx' => true, 'cy' => true, 'rx' => true, 'ry' => true] + $common, 'rect' => ['x' => true, 'y' => true, 'width' => true, 'height' => true, 'rx' => true, 'ry' => true] + $common,
+        'line' => ['x1' => true, 'y1' => true, 'x2' => true, 'y2' => true] + $common, 'polyline' => ['points' => true] + $common, 'polygon' => ['points' => true] + $common,
+    ];
 }

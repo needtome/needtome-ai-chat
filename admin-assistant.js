@@ -101,7 +101,9 @@
     }
 
     window.clearTimeout(pollTimer);
-    if (body.watching) pollTimer = window.setTimeout(function () { act('assistant', null, true); }, 8000);
+    // kra.name sets the pace (poll_after, seconds) and how long to watch (watch_until, a timestamp); a stale page stops asking
+    var until = Date.parse(body.watch_until || '') || 0;
+    if (body.watching && (!until || until > Date.now())) pollTimer = window.setTimeout(function () { act('assistant', null, true); }, Math.max(3, Math.min(60, Number(body.poll_after) || 8)) * 1000);
   }
 
   function setBusy(on) {

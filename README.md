@@ -1,4 +1,4 @@
-# NeedToMe AI Chat for Your Site
+# NeedToMe AI Chat
 
 A WordPress plugin that puts an AI consultant on your site. It answers visitors around the clock from your knowledge base (site pages, products, documents, price lists and your own answers), speaks the visitor's language, collects leads and hands a dialog over to a person when needed.
 
@@ -9,7 +9,7 @@ The chat, its knowledge base and the leads live at [kra.name](https://kra.name/)
 
 ## What you set in WordPress
 
-- The chat's look, position, loading mode, language and the pages it appears on; an inline chat with the `[aiworker_chat]` shortcode.
+- The chat's look, the chat button icon (a ready one or your own image), position, loading mode, language and the pages it appears on; an inline chat with the `[aiworker_chat]` shortcode.
 - The consultant and the chat texts in every language: greeting, quick questions, name and caption, the AI notice and the greeting on page open.
 - Leads and where they go: e-mail, Telegram, Slack, Microsoft Teams, Discord, Google Sheets, Notion, a CRM or a webhook.
 - The knowledge base: posts, pages, WooCommerce products, ACF fields and widgets sent from the site, plus sources and questions and answers.

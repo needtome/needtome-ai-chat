@@ -1,7 +1,7 @@
-=== NeedToMe AI Chat for Your Site ===
+=== NeedToMe AI Chat ===
 Contributors: needtome
 Donate link: https://www.donationalerts.com/r/needtome
-Tags: ai chat, chatbot, live chat, lead generation, customer support
+Tags: ai chatbot, live chat, lead generation, customer support, ai assistant
 Requires at least: 6.4
 Requires PHP: 7.4
 Stable tag: 0.10.2
@@ -50,7 +50,7 @@ The service's terms are at [kra.name/offer](https://kra.name/offer/) and its pri
 
 1. Register at https://kra.name/ and create a site chat in the panel (https://kra.name/app/panel). Fill its knowledge base.
 2. Add this site's domain to the chat's allowed sites. www is automatic; use *.example.com to allow all subdomains.
-3. In WordPress open Plugins > Add New, search for “NeedToMe AI Chat for Your Site”, then install and activate it. You can also upload the plugin ZIP.
+3. In WordPress open Plugins > Add New, search for “NeedToMe AI Chat”, then install and activate it. You can also upload the plugin ZIP.
 4. Open NeedToMe > AI Chat, connect your kra.name account with one button (or the chat's public `wk_` key), set the look and the loading mode, enable the chat and save. The connection check at the top shows whether everything is ready.
 
 The public key only selects the chat; it is not a secret. The widget stays hidden on domains that are not in the chat's allowed sites.

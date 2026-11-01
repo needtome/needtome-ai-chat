@@ -15,8 +15,10 @@
     if (!/^wk_[A-Za-z0-9]{24}$/.test(key)) return;
     started = true;
     var script = document.createElement('script');
-    // A daily version keeps visitors on the current widget after an update without defeating the browser cache.
-    var url = base + '/widget.js?v=' + Math.floor(Date.now() / 86400000);
+    // kra.name's build version (or, until the plugin has seen one, a daily one) keeps visitors on the current widget
+    // after an update without defeating the browser cache.
+    var version = /^[A-Za-z0-9._-]{1,40}$/.test(String(options.widget_version || '')) ? String(options.widget_version) : String(Math.floor(Date.now() / 86400000));
+    var url = base + '/widget.js?v=' + encodeURIComponent(version);
     // Sites with Trusted Types only accept script URLs from a policy the CSP names (trusted-types aiworker-chat-loader).
     try {
       var policy = window.trustedTypes && window.trustedTypes.createPolicy ? window.trustedTypes.createPolicy('aiworker-chat-loader', {

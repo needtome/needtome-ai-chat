@@ -2,21 +2,27 @@
 # This file is distributed under the GPL-2.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: NeedToMe AI Chat for Your Site 0.10.2\n"
+"Project-Id-Version: NeedToMe AI Chat 0.10.2\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/needtome-ai-chat\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-31T18:43:49+00:00\n"
+"POT-Creation-Date: 2026-11-01T03:17:52+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: needtome-ai-chat\n"
 
 #. Plugin Name of the plugin
 #: needtome-ai-chat.php
-msgid "NeedToMe AI Chat for Your Site"
+#: includes/chat-pick.php:65
+#: includes/chat-pick.php:290
+#: includes/connect.php:244
+#: needtome-ai-chat.php:515
+#: needtome-ai-chat.php:580
+#: needtome-ai-chat.php:718
+msgid "NeedToMe AI Chat"
 msgstr ""
 
 #. Plugin URI of the plugin
@@ -41,8 +47,8 @@ msgstr ""
 
 #: includes/assistant.php:14
 #: includes/chat-pick.php:110
-#: includes/connect.php:134
-#: includes/connect.php:246
+#: includes/connect.php:137
+#: includes/connect.php:249
 #: includes/mcp-help.php:125
 msgid "You are not allowed to do this."
 msgstr ""
@@ -53,8 +59,8 @@ msgstr ""
 
 #: includes/assistant.php:64
 #: includes/assistant.php:123
-#: includes/chat-settings.php:57
-#: includes/chat-settings.php:71
+#: includes/chat-settings.php:58
+#: includes/chat-settings.php:83
 #: includes/kb-remote.php:44
 msgid "kra.name cannot be reached from this site."
 msgstr ""
@@ -214,7 +220,7 @@ msgid "Answers"
 msgstr ""
 
 #: includes/assistant.php:135
-#: includes/chat-settings.php:160
+#: includes/chat-settings.php:185
 msgid "Leads"
 msgstr ""
 
@@ -227,7 +233,7 @@ msgid "Rated 1–3"
 msgstr ""
 
 #: includes/assistant.php:138
-#: needtome-ai-chat.php:698
+#: needtome-ai-chat.php:702
 msgid "Voice input"
 msgstr ""
 
@@ -252,7 +258,7 @@ msgid "kra.name did not register this site. Check that the site can reach kra.na
 msgstr ""
 
 #: includes/assistant.php:153
-#: includes/connect.php:240
+#: includes/connect.php:243
 msgid "The connection was not completed. Start it again."
 msgstr ""
 
@@ -329,7 +335,7 @@ msgid "Ask in plain words: the wizard sets up the persona, the knowledge base, t
 msgstr ""
 
 #: includes/assistant.php:348
-#: needtome-ai-chat.php:584
+#: needtome-ai-chat.php:588
 msgid "Statistics"
 msgstr ""
 
@@ -469,15 +475,6 @@ msgstr ""
 msgid "You need: %s."
 msgstr ""
 
-#: includes/chat-pick.php:65
-#: includes/chat-pick.php:290
-#: includes/connect.php:241
-#: needtome-ai-chat.php:511
-#: needtome-ai-chat.php:576
-#: needtome-ai-chat.php:714
-msgid "NeedToMe AI Chat"
-msgstr ""
-
 #. translators: 1: chat name, 2: consultant name
 #: includes/chat-pick.php:189
 #, php-format
@@ -553,7 +550,7 @@ msgstr ""
 #: includes/kb-remote.php:111
 #: includes/mcp-help.php:31
 #: includes/mcp-help.php:146
-#: needtome-ai-chat.php:618
+#: needtome-ai-chat.php:622
 msgid "kra.name panel"
 msgstr ""
 
@@ -575,219 +572,261 @@ msgstr ""
 msgid "Which chat should %s use?"
 msgstr ""
 
-#: includes/chat-settings.php:98
-#: includes/chat-settings.php:206
+#: includes/chat-settings.php:74
+#: includes/chat-settings.php:260
+msgid "Choose a PNG, JPEG or WebP image up to 1 MB."
+msgstr ""
+
+#: includes/chat-settings.php:110
+#: includes/chat-settings.php:232
 msgid "What the consultant answers from"
 msgstr ""
 
-#: includes/chat-settings.php:100
+#: includes/chat-settings.php:112
 msgid "Consultant and chat texts"
 msgstr ""
 
-#: includes/chat-settings.php:102
+#: includes/chat-settings.php:114
 msgid "The same settings as in the chat's settings at kra.name: a change saved here is there at once, and a change made there shows here."
 msgstr ""
 
-#: includes/chat-settings.php:106
-#: needtome-ai-chat.php:744
+#: includes/chat-settings.php:118
+#: needtome-ai-chat.php:748
 msgid "Consultant"
 msgstr ""
 
-#: includes/chat-settings.php:112
+#: includes/chat-settings.php:124
 msgid "The consultant's role and instructions are edited in the kra.name panel or by the setup wizard."
 msgstr ""
 
-#: includes/chat-settings.php:117
+#: includes/chat-settings.php:129
 msgid "Texts by language"
 msgstr ""
 
-#: includes/chat-settings.php:121
+#: includes/chat-settings.php:133
 msgid "Fill the empty fields of the other languages by translating from"
 msgstr ""
 
-#: includes/chat-settings.php:123
+#: includes/chat-settings.php:135
 msgid "Translate"
 msgstr ""
 
-#: includes/chat-settings.php:128
+#: includes/chat-settings.php:140
 msgid "Greeting"
 msgstr ""
 
-#: includes/chat-settings.php:131
+#: includes/chat-settings.php:143
 msgid "Quick questions"
 msgstr ""
 
-#: includes/chat-settings.php:132
+#: includes/chat-settings.php:144
 msgid "Buttons under the greeting; a visitor asks with one click. Empty lines are not shown."
 msgstr ""
 
 #. translators: %d: number of the quick question
-#: includes/chat-settings.php:134
+#: includes/chat-settings.php:146
 #, php-format
 msgid "Quick question %d"
 msgstr ""
 
-#: includes/chat-settings.php:138
+#: includes/chat-settings.php:150
 msgid "Name in the chat header"
 msgstr ""
 
-#: includes/chat-settings.php:138
-#: includes/chat-settings.php:140
+#: includes/chat-settings.php:150
+#: includes/chat-settings.php:152
 msgid "The consultant's name"
 msgstr ""
 
-#: includes/chat-settings.php:139
+#: includes/chat-settings.php:151
 msgid "Caption under the name"
 msgstr ""
 
-#: includes/chat-settings.php:139
+#: includes/chat-settings.php:151
 msgid "The consultant's role"
 msgstr ""
 
-#: includes/chat-settings.php:140
+#: includes/chat-settings.php:152
 msgid "Side tab label"
 msgstr ""
 
-#: includes/chat-settings.php:142
+#: includes/chat-settings.php:154
 msgid "An empty field shows what is greyed out in it: the consultant's own name and role."
 msgstr ""
 
-#: includes/chat-settings.php:146
+#: includes/chat-settings.php:158
 msgid "Default language"
 msgstr ""
 
-#: includes/chat-settings.php:148
+#: includes/chat-settings.php:160
 msgid "when the page's language is not one of the chat's"
 msgstr ""
 
-#: includes/chat-settings.php:151
+#: includes/chat-settings.php:164
+#: includes/chat-settings.php:165
+msgid "Chat button icon"
+msgstr ""
+
+#: includes/chat-settings.php:169
+msgid "Your image"
+msgstr ""
+
+#: includes/chat-settings.php:171
+msgid "Upload your own"
+msgstr ""
+
+#: includes/chat-settings.php:172
+msgid "Remove your image"
+msgstr ""
+
+#: includes/chat-settings.php:173
+msgid "PNG, JPEG or WebP up to 1 MB; it is cropped to a square. It is uploaded to kra.name at once."
+msgstr ""
+
+#: includes/chat-settings.php:176
 msgid "In the chat"
 msgstr ""
 
-#: includes/chat-settings.php:152
+#: includes/chat-settings.php:177
 msgid "Say that an AI answers and its answers may be inaccurate"
 msgstr ""
 
-#: includes/chat-settings.php:153
+#: includes/chat-settings.php:178
 msgid "A short note under the chat's input: an AI assistant answers, answers may be inaccurate, check what matters with the staff. It lowers the risk of claims over a wrong answer; we recommend keeping it on."
 msgstr ""
 
-#: includes/chat-settings.php:154
+#: includes/chat-settings.php:179
 msgid "Show the AI's greeting when a page opens"
 msgstr ""
 
-#: includes/chat-settings.php:155
+#: includes/chat-settings.php:180
 msgid "The consultant's greeting, the same as at the start of the dialog, appears next to the chat button for a few seconds. Once per visitor session; not shown when the visitor has already written."
 msgstr ""
 
-#: includes/chat-settings.php:161
+#: includes/chat-settings.php:186
 msgid "Collect visitors' contacts: name, phone or email and what they need"
 msgstr ""
 
-#: includes/chat-settings.php:162
+#: includes/chat-settings.php:187
 msgid "When a visitor wants to get in touch, order or book, the consultant asks for a contact and passes the lead on."
 msgstr ""
 
-#: includes/chat-settings.php:165
+#: includes/chat-settings.php:190
 msgid "Send leads"
 msgstr ""
 
-#: includes/chat-settings.php:188
+#: includes/chat-settings.php:214
 msgid "Saved — leave empty to keep it"
 msgstr ""
 
 #. translators: %s: channel name
-#: includes/chat-settings.php:194
+#: includes/chat-settings.php:220
 #, php-format
 msgid "Connect %s in the kra.name panel"
 msgstr ""
 
-#: includes/chat-settings.php:198
+#: includes/chat-settings.php:224
 msgid "Test delivery"
 msgstr ""
 
-#: includes/chat-settings.php:198
+#: includes/chat-settings.php:224
 msgid "A short test message to every saved channel."
 msgstr ""
 
-#: includes/chat-settings.php:210
+#: includes/chat-settings.php:236
 msgid "With general knowledge the consultant answers general questions on the topic too, but prices, terms and contacts come only from your knowledge base."
 msgstr ""
 
-#: includes/chat-settings.php:211
+#: includes/chat-settings.php:237
 msgid "Use the company information from the kra.name panel"
 msgstr ""
 
-#: includes/chat-settings.php:217
+#: includes/chat-settings.php:243
 msgid "All settings in the kra.name panel"
 msgstr ""
 
-#: includes/chat-settings.php:225
+#: includes/chat-settings.php:251
 #: includes/kb-remote.php:133
 msgid "Saving…"
 msgstr ""
 
-#: includes/chat-settings.php:225
+#: includes/chat-settings.php:251
 msgid "Saved to kra.name."
 msgstr ""
 
-#: includes/chat-settings.php:225
+#: includes/chat-settings.php:251
 msgid "Nothing has changed."
 msgstr ""
 
-#: includes/chat-settings.php:226
+#: includes/chat-settings.php:252
 msgid "The chat was changed at kra.name after this page was opened. Reload the page to see those changes, then make yours again."
 msgstr ""
 
-#: includes/chat-settings.php:227
+#: includes/chat-settings.php:253
 msgid "kra.name did not accept some values: see the fields marked below."
 msgstr ""
 
-#: includes/chat-settings.php:227
+#: includes/chat-settings.php:253
 #: includes/kb-remote.php:133
 msgid "Not saved: kra.name answered with an error. Try again a bit later."
 msgstr ""
 
-#: includes/chat-settings.php:228
+#: includes/chat-settings.php:254
 msgid "Reload the page"
 msgstr ""
 
-#: includes/chat-settings.php:229
+#: includes/chat-settings.php:255
 msgid "Sending a test message…"
 msgstr ""
 
-#: includes/chat-settings.php:229
+#: includes/chat-settings.php:255
 msgid "Delivery is off or no channel is saved yet."
 msgstr ""
 
-#: includes/chat-settings.php:230
+#: includes/chat-settings.php:256
 msgid "Translating…"
 msgstr ""
 
-#: includes/chat-settings.php:230
+#: includes/chat-settings.php:256
 msgid "The empty fields are filled with the translation. Check them and press «Save settings»."
 msgstr ""
 
-#: includes/chat-settings.php:231
+#: includes/chat-settings.php:257
 msgid "Nothing to translate: the fields of the other languages are filled already."
 msgstr ""
 
-#: includes/chat-settings.php:353
+#: includes/chat-settings.php:258
+msgid "Uploading…"
+msgstr ""
+
+#: includes/chat-settings.php:258
+msgid "Removing…"
+msgstr ""
+
+#: includes/chat-settings.php:259
+msgid "Your image is uploaded to kra.name and chosen as the icon."
+msgstr ""
+
+#: includes/chat-settings.php:259
+msgid "Your image is removed; the standard icon is back."
+msgstr ""
+
+#: includes/chat-settings.php:400
 msgid "Not saved: kra.name did not accept the changes of a block above (see its message)."
 msgstr ""
 
 #. translators: %s: this site's domain
-#: includes/connect.php:239
+#: includes/connect.php:242
 #, php-format
 msgid "AI Worker is connected to %s. Go back to the NeedToMe AI Chat settings in the browser where you are signed in to the site: they update by themselves."
 msgstr ""
 
-#: includes/connect.php:436
+#: includes/connect.php:439
 #: includes/kb-sync.php:396
 msgid "AI Worker cannot be reached right now. The connection is kept; try again in a minute."
 msgstr ""
 
-#: includes/connect.php:436
+#: includes/connect.php:439
 #: includes/kb-sync.php:396
 msgid "The connection to AI Worker is being renewed. Try again in a few seconds."
 msgstr ""
@@ -947,7 +986,7 @@ msgid "If you send this site's content from here, do not also add the same site 
 msgstr ""
 
 #: includes/kb-sync.php:704
-#: needtome-ai-chat.php:708
+#: needtome-ai-chat.php:712
 msgid "Save settings"
 msgstr ""
 
@@ -1498,8 +1537,8 @@ msgid "On this site"
 msgstr ""
 
 #: includes/needtome-profile.php:97
-#: needtome-ai-chat.php:515
-#: needtome-ai-chat.php:584
+#: needtome-ai-chat.php:519
+#: needtome-ai-chat.php:588
 msgid "Settings"
 msgstr ""
 
@@ -1772,378 +1811,378 @@ msgstr ""
 msgid "Unexpected answer from kra.name (HTTP %d)."
 msgstr ""
 
-#: needtome-ai-chat.php:511
+#: needtome-ai-chat.php:515
 msgid "AI Chat"
 msgstr ""
 
-#: needtome-ai-chat.php:570
+#: needtome-ai-chat.php:574
 msgid "Not connected"
 msgstr ""
 
-#: needtome-ai-chat.php:570
+#: needtome-ai-chat.php:574
 msgid "Connected"
 msgstr ""
 
-#: needtome-ai-chat.php:570
+#: needtome-ai-chat.php:574
 msgid "Needs setup at kra.name"
 msgstr ""
 
-#: needtome-ai-chat.php:570
+#: needtome-ai-chat.php:574
 msgid "Not working"
 msgstr ""
 
-#: needtome-ai-chat.php:576
+#: needtome-ai-chat.php:580
 msgid "for your site"
 msgstr ""
 
-#: needtome-ai-chat.php:579
+#: needtome-ai-chat.php:583
 msgid "Shown on the site"
 msgstr ""
 
-#: needtome-ai-chat.php:579
+#: needtome-ai-chat.php:583
 msgid "Hidden on the site"
 msgstr ""
 
-#: needtome-ai-chat.php:584
+#: needtome-ai-chat.php:588
 msgid "Knowledge base"
 msgstr ""
 
-#: needtome-ai-chat.php:594
+#: needtome-ai-chat.php:598
 msgid "This site's Content-Security-Policy will block the chat."
 msgstr ""
 
-#: needtome-ai-chat.php:594
+#: needtome-ai-chat.php:598
 msgid "Use these directives in the CSP header of your theme or security plugin (each replaces the directive of the same name):"
 msgstr ""
 
-#: needtome-ai-chat.php:596
+#: needtome-ai-chat.php:600
 msgid "The policy uses 'strict-dynamic': the script tag aiworker-chat-loader needs the policy's nonce (security plugins that add nonces to WordPress scripts do this)."
 msgstr ""
 
-#: needtome-ai-chat.php:597
+#: needtome-ai-chat.php:601
 msgid "Developers can take this list from <code>aiworker_chat_csp_sources()</code>."
 msgstr ""
 
-#: needtome-ai-chat.php:603
+#: needtome-ai-chat.php:607
 msgid "Connect your chat"
 msgstr ""
 
 #. translators: %s: link to kra.name
-#: needtome-ai-chat.php:612
+#: needtome-ai-chat.php:616
 #, php-format
 msgid "The AI consultant's knowledge base and instructions are filled in at the %s client panel:"
 msgstr ""
 
-#: needtome-ai-chat.php:616
+#: needtome-ai-chat.php:620
 msgid "Everything is connected"
 msgstr ""
 
 #. translators: %s: link to the kra.name panel
-#: needtome-ai-chat.php:618
+#: needtome-ai-chat.php:622
 #, php-format
 msgid "Sign up and create a site chat in the %s."
 msgstr ""
 
 #. translators: %s: link to the kra.name panel
-#: needtome-ai-chat.php:619
+#: needtome-ai-chat.php:623
 msgid "Choose the consultant and fill the chat's knowledge base."
 msgstr ""
 
 #. translators: %s: this site's domain
-#: needtome-ai-chat.php:620
+#: needtome-ai-chat.php:624
 #, php-format
 msgid "%s was added to the chat's allowed sites automatically."
 msgstr ""
 
 #. translators: 1: this site's domain, 2: wildcard for its subdomains
-#: needtome-ai-chat.php:620
+#: needtome-ai-chat.php:624
 #, php-format
 msgid "Add %1$s to the chat's allowed sites (www is included; %2$s allows every subdomain)."
 msgstr ""
 
 #. translators: 1: this site's domain, 2: wildcard for its subdomains
-#: needtome-ai-chat.php:621
+#: needtome-ai-chat.php:625
 msgid "The chat's public key was put in automatically."
 msgstr ""
 
 #. translators: 1: this site's domain, 2: wildcard for its subdomains
-#: needtome-ai-chat.php:621
+#: needtome-ai-chat.php:625
 msgid "Copy the public key wk_… from the chat's card and paste it here."
 msgstr ""
 
-#: needtome-ai-chat.php:629
+#: needtome-ai-chat.php:633
 msgid "Public chat key"
 msgstr ""
 
-#: needtome-ai-chat.php:632
+#: needtome-ai-chat.php:636
 msgid "Save and check"
 msgstr ""
 
-#: needtome-ai-chat.php:637
+#: needtome-ai-chat.php:641
 msgid "The key only selects the chat; it is not a secret."
 msgstr ""
 
-#: needtome-ai-chat.php:646
+#: needtome-ai-chat.php:650
 msgid "Check again"
 msgstr ""
 
-#: needtome-ai-chat.php:651
+#: needtome-ai-chat.php:655
 msgid "Show the chat on this site"
 msgstr ""
 
-#: needtome-ai-chat.php:652
+#: needtome-ai-chat.php:656
 msgid "Visitors see the chat on the pages chosen below."
 msgstr ""
 
-#: needtome-ai-chat.php:652
+#: needtome-ai-chat.php:656
 msgid "Available once a working key is saved and checked."
 msgstr ""
 
-#: needtome-ai-chat.php:657
+#: needtome-ai-chat.php:661
 msgid "Look"
 msgstr ""
 
-#: needtome-ai-chat.php:659
+#: needtome-ai-chat.php:663
 msgid "Design"
 msgstr ""
 
-#: needtome-ai-chat.php:659
+#: needtome-ai-chat.php:663
 msgid "Classic: button and window"
 msgstr ""
 
-#: needtome-ai-chat.php:659
+#: needtome-ai-chat.php:663
 msgid "Bar at the bottom"
 msgstr ""
 
-#: needtome-ai-chat.php:659
+#: needtome-ai-chat.php:663
 msgid "Side panel"
 msgstr ""
 
-#: needtome-ai-chat.php:659
+#: needtome-ai-chat.php:663
 msgid "Inside a page block"
 msgstr ""
 
-#: needtome-ai-chat.php:660
+#: needtome-ai-chat.php:664
 msgid "Block id"
 msgstr ""
 
 #. translators: 1: the shortcode, 2: the HTML element
-#: needtome-ai-chat.php:661
+#: needtome-ai-chat.php:665
 #, php-format
 msgid "Put the %1$s shortcode into a post or page (or %2$s into the theme). Pages without the block show the usual button."
 msgstr ""
 
 #. translators: 1: the shortcode, 2: the HTML element
-#: needtome-ai-chat.php:662
+#: needtome-ai-chat.php:666
 msgid "Block height, px"
 msgstr ""
 
-#: needtome-ai-chat.php:663
+#: needtome-ai-chat.php:667
 msgid "Accent colour"
 msgstr ""
 
-#: needtome-ai-chat.php:664
+#: needtome-ai-chat.php:668
 msgid "Colour scheme"
 msgstr ""
 
-#: needtome-ai-chat.php:664
+#: needtome-ai-chat.php:668
 msgid "«Follow the visitor's system» switches between light and dark by the device setting."
 msgstr ""
 
-#: needtome-ai-chat.php:665
+#: needtome-ai-chat.php:669
 msgid "Change separate colours"
 msgstr ""
 
-#: needtome-ai-chat.php:665
+#: needtome-ai-chat.php:669
 msgid "Empty means the scheme's colour."
 msgstr ""
 
-#: needtome-ai-chat.php:667
+#: needtome-ai-chat.php:671
 msgid "Advanced colours"
 msgstr ""
 
-#: needtome-ai-chat.php:668
+#: needtome-ai-chat.php:672
 msgid "Position"
 msgstr ""
 
-#: needtome-ai-chat.php:668
+#: needtome-ai-chat.php:672
 msgid "Right"
 msgstr ""
 
-#: needtome-ai-chat.php:668
+#: needtome-ai-chat.php:672
 msgid "Left"
 msgstr ""
 
-#: needtome-ai-chat.php:669
+#: needtome-ai-chat.php:673
 msgid "Button offset, px"
 msgstr ""
 
-#: needtome-ai-chat.php:669
+#: needtome-ai-chat.php:673
 msgid "sideways"
 msgstr ""
 
-#: needtome-ai-chat.php:670
+#: needtome-ai-chat.php:674
 msgid "up / down"
 msgstr ""
 
-#: needtome-ai-chat.php:671
+#: needtome-ai-chat.php:675
 msgid "Moves the chat button from its corner: positive values go right and down. Empty uses the offset set for the chat at kra.name. Watch the button in the corner of this page."
 msgstr ""
 
-#: needtome-ai-chat.php:676
+#: needtome-ai-chat.php:680
 msgid "Where to show the chat"
 msgstr ""
 
-#: needtome-ai-chat.php:678
+#: needtome-ai-chat.php:682
 msgid "Pages"
 msgstr ""
 
-#: needtome-ai-chat.php:678
+#: needtome-ai-chat.php:682
 msgid "On every page"
 msgstr ""
 
-#: needtome-ai-chat.php:678
+#: needtome-ai-chat.php:682
 msgid "Only on the pages listed"
 msgstr ""
 
-#: needtome-ai-chat.php:678
+#: needtome-ai-chat.php:682
 msgid "On every page except those listed"
 msgstr ""
 
-#: needtome-ai-chat.php:679
+#: needtome-ai-chat.php:683
 msgid "Page list"
 msgstr ""
 
-#: needtome-ai-chat.php:680
+#: needtome-ai-chat.php:684
 msgid "One page per line, without the site address: <code>/</code> is the home page, <code>/contacts/</code> one page, <code>/shop/*</code> a section with everything inside it."
 msgstr ""
 
-#: needtome-ai-chat.php:681
+#: needtome-ai-chat.php:685
 msgid "Show the chat"
 msgstr ""
 
-#: needtome-ai-chat.php:681
+#: needtome-ai-chat.php:685
 msgid "When the page opens"
 msgstr ""
 
-#: needtome-ai-chat.php:681
+#: needtome-ai-chat.php:685
 msgid "After the visitor's first action (scroll, tap, key)"
 msgstr ""
 
-#: needtome-ai-chat.php:681
+#: needtome-ai-chat.php:685
 msgid "After a delay"
 msgstr ""
 
-#: needtome-ai-chat.php:682
+#: needtome-ai-chat.php:686
 msgid "seconds"
 msgstr ""
 
-#: needtome-ai-chat.php:683
+#: needtome-ai-chat.php:687
 msgid "A later start does not slow the page down."
 msgstr ""
 
-#: needtome-ai-chat.php:684
+#: needtome-ai-chat.php:688
 msgid "Auto: the language of the page"
 msgstr ""
 
-#: needtome-ai-chat.php:686
+#: needtome-ai-chat.php:690
 msgid "Language"
 msgstr ""
 
-#: needtome-ai-chat.php:687
+#: needtome-ai-chat.php:691
 msgid "«Auto» speaks the language of the page the visitor opened (its URL prefix or language subdomain, then its lang attribute), otherwise the browser's. A chosen language is used on every page."
 msgstr ""
 
-#: needtome-ai-chat.php:693
+#: needtome-ai-chat.php:697
 msgid "Features"
 msgstr ""
 
-#: needtome-ai-chat.php:696
+#: needtome-ai-chat.php:700
 msgid "Show the microphone: visitors dictate instead of typing"
 msgstr ""
 
-#: needtome-ai-chat.php:697
+#: needtome-ai-chat.php:701
 msgid "Paid add-on"
 msgstr ""
 
 #. translators: %s: link to the kra.name billing page
-#: needtome-ai-chat.php:698
+#: needtome-ai-chat.php:702
 #, php-format
 msgid "Not included in your plan. Voice input is a paid add-on of the chat: turn it on in %s."
 msgstr ""
 
 #. translators: %s: link to the kra.name billing page
-#: needtome-ai-chat.php:698
+#: needtome-ai-chat.php:702
 msgid "«Subscription»"
 msgstr ""
 
 #. translators: %s: link to the kra.name billing page
-#: needtome-ai-chat.php:699
+#: needtome-ai-chat.php:703
 msgid "Dialog rating"
 msgstr ""
 
 #. translators: %s: link to the kra.name billing page
-#: needtome-ai-chat.php:699
+#: needtome-ai-chat.php:703
 msgid "Ask for 1–5 stars when the consultant has answered every question"
 msgstr ""
 
 #. translators: %s: link to the kra.name billing page
-#: needtome-ai-chat.php:699
+#: needtome-ai-chat.php:703
 msgid "If the rating is off for the chat at kra.name, this box does not turn it on."
 msgstr ""
 
-#: needtome-ai-chat.php:700
+#: needtome-ai-chat.php:704
 msgid "No privacy page is chosen: set it in Settings → Privacy, otherwise the link does not appear."
 msgstr ""
 
-#: needtome-ai-chat.php:702
+#: needtome-ai-chat.php:706
 msgid "Privacy policy"
 msgstr ""
 
-#: needtome-ai-chat.php:702
+#: needtome-ai-chat.php:706
 msgid "Show a link to this site's privacy policy in the chat"
 msgstr ""
 
-#: needtome-ai-chat.php:708
+#: needtome-ai-chat.php:712
 msgid "Reset preview"
 msgstr ""
 
-#: needtome-ai-chat.php:708
+#: needtome-ai-chat.php:712
 msgid "Preview reset to the saved settings."
 msgstr ""
 
-#: needtome-ai-chat.php:708
+#: needtome-ai-chat.php:712
 msgid "The preview changes at once; the site gets the changes after saving."
 msgstr ""
 
-#: needtome-ai-chat.php:744
+#: needtome-ai-chat.php:748
 msgid "Anna"
 msgstr ""
 
-#: needtome-ai-chat.php:746
+#: needtome-ai-chat.php:750
 msgid "This is a preview in the WordPress settings: AI answers, voice and files work in the real chat on the site."
 msgstr ""
 
-#: needtome-ai-chat.php:759
+#: needtome-ai-chat.php:764
 msgid "Live preview"
 msgstr ""
 
-#: needtome-ai-chat.php:760
+#: needtome-ai-chat.php:765
 msgid "Open the chat window"
 msgstr ""
 
-#: needtome-ai-chat.php:760
+#: needtome-ai-chat.php:765
 msgid "Close the chat window"
 msgstr ""
 
-#: needtome-ai-chat.php:761
+#: needtome-ai-chat.php:766
 msgid "The chat button in the corner of this page is your chat with the look from this form, exactly as visitors will see it on the site. Every change, including the position and the offset, appears at once, before saving."
 msgstr ""
 
-#: needtome-ai-chat.php:761
+#: needtome-ai-chat.php:766
 msgid "The chat button in the corner of this page shows the look from this form with a sample consultant; after the key is saved it shows your chat's name and avatar. Every change, including the position and the offset, appears at once, before saving."
 msgstr ""
 
-#: needtome-ai-chat.php:762
+#: needtome-ai-chat.php:767
 msgid "«Inside a page block»: this is how the chat stands in the block of a page."
 msgstr ""

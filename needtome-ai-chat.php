@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name: NeedToMe AI Chat for Your Site
+ * Plugin Name: NeedToMe AI Chat
  * Plugin URI: https://needtome.com/needtome-ai-chat/
  * Description: An AI consultant in a chat on your site: answers visitors 24/7 from your own knowledge base (site pages, documents, price lists), speaks the visitor's language, collects leads and hands a dialog over to a person. Requires an account at <a href="https://kra.name/" target="_blank" rel="noopener">kra.name</a>, where the chat, its knowledge and its answers are set up.
  * Version: 0.10.2
@@ -273,7 +273,7 @@ function aiworker_chat_check(string $key, bool $fresh = false): array {
     // the consultant's name and role come in the preview's language (with «auto», kra.name answers in the chat's
     // default language, which put an English name into a Russian preview)
     $lang = aiworker_chat_preview_lang(aiworker_chat_options());
-    if (is_array($cached) && ($cached['key'] ?? '') === $key && ($cached['locale'] ?? '') === determine_locale() && ($cached['lang'] ?? '') === $lang && isset($cached['voice_allowed'], $cached['unreachable'], $cached['http'], $cached['texts'])) return $cached;
+    if (is_array($cached) && ($cached['key'] ?? '') === $key && ($cached['locale'] ?? '') === determine_locale() && ($cached['lang'] ?? '') === $lang && isset($cached['voice_allowed'], $cached['unreachable'], $cached['http'], $cached['texts'], $cached['icons'])) return $cached;
     $origin = untrailingslashit(home_url());
     $response = wp_remote_get(aiworker_chat_base().'/api/web/'.rawurlencode($key).'/config?lang='.rawurlencode($lang), ['timeout' => 10, 'headers' => ['Origin' => $origin, 'Accept' => 'application/json']]);
     // http and setup_required feed the checklist of step 1 (aiworker_chat_setup_steps)
@@ -303,11 +303,15 @@ function aiworker_chat_check(string $key, bool $fresh = false): array {
                 'scheme' => in_array($body['scheme'] ?? '', ['light', 'dim', 'dark', 'auto'], true) ? $body['scheme'] : 'light',
                 // the greeting (one per language) and the quick questions, so the preview shows the chat's own
                 'greeting' => array_map(static function ($g): string { return sanitize_textarea_field((string) $g); }, array_filter((array) ($body['greeting'] ?? []), 'is_string')),
-                'suggestions' => array_values(array_filter(array_map('sanitize_text_field', array_map('strval', array_filter((array) ($body['suggestions'] ?? []), 'is_scalar'))), 'strlen'))];
+                'suggestions' => array_values(array_filter(array_map('sanitize_text_field', array_map('strval', array_filter((array) ($body['suggestions'] ?? []), 'is_scalar'))), 'strlen')),
+                // the chat button icon: the chosen one, the own image and the ready icons' SVGs (the preview draws them)
+                'launcher_icon' => sanitize_key((string) ($body['launcher_icon'] ?? 'chat')) ?: 'chat', 'launcher_icon_url' => esc_url_raw((string) ($body['launcher_icon_url'] ?? ''), ['https']),
+                'launcher_icons' => array_map(static function ($svg): string { return wp_kses((string) $svg, aiworker_chat_svg_kses()); }, array_filter((array) ($body['launcher_icons'] ?? []), 'is_string'))];
         }
     }
     $result['key'] = $key;
     $result['texts'] = 1; // a check cached before the greeting was kept is made again
+    $result['icons'] = 1; // and before the launcher icons were kept
     $result['locale'] = determine_locale();
     $result['lang'] = $lang;
     set_transient('aiworker_chat_check', $result, 5 * MINUTE_IN_SECONDS);
@@ -631,9 +635,9 @@ function aiworker_chat_settings_page(): void {
                 <input id="aiwc-key" type="text" name="<?php echo esc_attr($name); ?>[key]" value="<?php echo esc_attr($o['key']); ?>" pattern="wk_[A-Za-z0-9]{24}" placeholder="wk_xxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" spellcheck="false">
                 <button type="submit" class="button button-secondary" id="aiwc-key-save"<?php echo $o['key'] !== '' ? ' hidden' : ''; ?>><?php esc_html_e('Save and check', 'needtome-ai-chat'); ?></button>
               </div>
-              <script>
+              <?php ob_start(); ?>
               (function (i, b) { var saved = i.value; i.addEventListener('input', function () { b.hidden = i.value.trim() === saved; }); })(document.getElementById('aiwc-key'), document.getElementById('aiwc-key-save'));
-              </script>
+              <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
               <p class="description"><?php esc_html_e('The key only selects the chat; it is not a secret.', 'needtome-ai-chat'); ?></p>
             </div>
             <?php endif; ?>
@@ -749,6 +753,7 @@ function aiworker_chat_preview(array $o, array $persona, bool $voiceAllowed): vo
         'data-color' => (string) $o['color'], 'data-position' => (string) $o['position'], 'data-voice' => $o['voice'] && $voiceAllowed ? '1' : '0', 'data-rating' => $o['rating'] ? '1' : '0',
     ];
     if (! empty($persona['greeting'])) $attrs['data-greeting'] = (string) wp_json_encode($persona['greeting']);
+    if (! empty($persona['launcher_icons'])) $attrs += ['data-launcher-icons' => (string) wp_json_encode($persona['launcher_icons']), 'data-launcher-icon' => (string) ($persona['launcher_icon'] ?? 'chat'), 'data-launcher-icon-url' => (string) ($persona['launcher_icon_url'] ?? '')];
     if (! empty($persona['suggestions'])) $attrs['data-suggestions'] = (string) wp_json_encode($persona['suggestions']);
     if ($o['offset_x'] !== '') $attrs['data-offset-x'] = (string) $o['offset_x'];
     if ($o['offset_y'] !== '') $attrs['data-offset-y'] = (string) $o['offset_y'];
@@ -762,7 +767,7 @@ function aiworker_chat_preview(array $o, array $persona, bool $voiceAllowed): vo
       <div class="aiwc-inline-only aiwc-inline-preview"><p class="description"><?php esc_html_e('«Inside a page block»: this is how the chat stands in the block of a page.', 'needtome-ai-chat'); ?></p><div id="aiwc-inline"></div></div>
     </div>
     <?php echo wp_get_script_tag($attrs); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_get_script_tag escapes each HTML attribute. ?>
-    <script>
+    <?php ob_start(); ?>
     (function () {
       var preview = document.querySelector('.aiwc-preview'), form = document.querySelector('form.aiwc-grid'); if (!preview || !form) return;
       var c = JSON.parse(preview.getAttribute('data-config') || '{}');
@@ -781,6 +786,9 @@ function aiworker_chat_preview(array $o, array $persona, bool $voiceAllowed): vo
           if (g && g.value.trim()) extra.greeting = g.value.trim(); // empty: the chat's own greeting stays
           var an = document.querySelector('[data-cs-field="ai_notice"]'), gp = document.querySelector('[data-cs-field="greet_popup"]');
           if (an) extra.aiNotice = an.checked; if (gp) extra.greet = gp.checked;
+          document.documentElement.style.setProperty('--aiwc-accent', hex(field('color').value) || '#4f46e5'); // the icon picker shows the chat's colour
+          var ic = document.querySelector('[data-cs-field="launcher_icon"]:checked');
+          if (ic) { extra.launcherIcon = ic.value; extra.launcherIconUrl = ic.value === 'custom' ? ic.getAttribute('data-url') || '' : ''; }
           if (q.length) extra.suggestions = Array.prototype.map.call(q, function (f) { return f.value.trim(); }).filter(Boolean);
           window.dispatchEvent(new CustomEvent('aiworker-preview-options', { detail: Object.assign(extra, {
             theme: field('theme').value, scheme: field('scheme').value || c.chatScheme, colors: colors, color: hex(field('color').value) || '#4f46e5',
@@ -797,7 +805,7 @@ function aiworker_chat_preview(array $o, array $persona, bool $voiceAllowed): vo
       form.addEventListener('input', push); form.addEventListener('change', push);
       // the «Chat texts» card loads after the page and may sit outside the form
       document.addEventListener('input', function (e) { if (e.target.closest && e.target.closest('[data-cs-field$=".greeting"], [data-cs-sugg], [data-cs-field="ai_notice"], [data-cs-field="greet_popup"]')) push(); });
-      document.addEventListener('change', function (e) { if (e.target.matches && e.target.matches('[data-cs-field="ai_notice"], [data-cs-field="greet_popup"]')) push(); });
+      document.addEventListener('change', function (e) { if (e.target.matches && e.target.matches('[data-cs-field="ai_notice"], [data-cs-field="greet_popup"], [data-cs-field="launcher_icon"]')) push(); });
       document.addEventListener('aiwc-lazy-put', function (e) { if (e.detail === 'chat') push(); });
       // One button opens and closes the preview window; its label follows the window state.
       var toggleBtn = document.getElementById('aiwc-open');
@@ -846,14 +854,26 @@ function aiworker_chat_preview(array $o, array $persona, bool $voiceAllowed): vo
         });
       }
     })();
-    </script>
+    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
     <?php
+}
+
+/**
+ * Prints a block of the plugin's CSS where it is called, through the WordPress style API (a registered handle with
+ * inline CSS), as WordPress.org asks instead of a hand-written <style> tag.
+ */
+function aiworker_chat_print_style(string $handle, string $css): void {
+    $css = trim(wp_strip_all_tags($css));
+    if ($css === '') return;
+    wp_register_style($handle, false, [], AIWORKER_CHAT_VERSION);
+    wp_add_inline_style($handle, $css);
+    wp_print_styles($handle);
 }
 
 /** The settings page's own look: cards, a highlighted connection block, a sticky preview column. */
 function aiworker_chat_admin_styles(): void {
     ?>
-    <style>
+    <?php ob_start(); ?>
       .aiwc{max-width:1320px}.aiwc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 18px}.aiwc-head h1{margin:0;padding:0;font-size:24px;font-weight:700}.aiwc-head h1 span{font-weight:400;color:#646970}.aiwc-connect-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:stretch;margin-bottom:14px}.aiwc-connect-row .aiwc-key{margin:0}.aiwc-pick{padding:12px 14px;border:1px dashed #c3c4c7;border-radius:8px}.aiwc-pick h3{margin:0 0 6px;font-size:14px}.aiwc-pick p{margin:0 0 8px}.aiwc-pick p:last-child{margin-bottom:0}.aiwc-connect-row--linked{grid-template-columns:minmax(0,1fr)}@media (max-width:1100px){.aiwc-connect-row{grid-template-columns:minmax(0,1fr)}}.aiwc-pick__error{color:#b32d2e}.aiwc-pick__account{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.aiwc-pick__account .aiwc-aw__account{color:#50575e}
       .wrap.aiwc h2.aiwc-tabs{margin:0 0 18px}
       .aiwc-pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;line-height:1.6}
@@ -885,7 +905,7 @@ function aiworker_chat_admin_styles(): void {
       .aiwc-save{position:sticky;bottom:12px;z-index:5;justify-self:end;max-width:100%;display:flex;flex-direction:row-reverse;align-items:center;gap:12px;padding:12px 16px;background:#fff;border:1px solid #dcdcde;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.08)}.aiwc-save .button-primary{min-width:160px}.aiwc-save .aiwc-reset{border-radius:8px}.aiwc-save [hidden]{display:none!important}.aiwc-save.is-side .aiwc-reset{width:100%;text-align:center}
       .aiwc-save.is-side{position:static;justify-self:auto;flex-direction:column;align-items:stretch;gap:8px;margin-bottom:16px;padding:16px 18px;box-shadow:none}.aiwc-save.is-side .button-primary{width:100%;text-align:center}.aiwc-save.is-side .description{margin:0}
       .aiwc-side{position:sticky;top:46px}
-      .aiwc-preview{background:#fff;border:1px solid #dcdcde;border-radius:12px;padding:16px 18px}.aiwc-usage{background:#fff;border:1px solid #dcdcde;border-radius:12px;padding:16px 18px;margin-bottom:16px;display:grid;gap:12px}.aiwc-usage h2{margin:0;font-size:15px}.aiwc-meter__row{display:flex;justify-content:space-between;gap:12px;font-size:13px}.aiwc-meter__label{color:#646970}.aiwc-meter__value{font-weight:600;text-align:right;font-variant-numeric:tabular-nums}.aiwc-meter__bar{height:6px;border-radius:3px;background:#f0f0f1;margin-top:6px;overflow:hidden}.aiwc-meter__bar span{display:block;height:100%;border-radius:3px;background:#3858e9}.aiwc-meter.is-warn .aiwc-meter__bar span{background:#dba617}.aiwc-meter.is-bad .aiwc-meter__bar span{background:#d63638}.aiwc-meter__hint{margin-top:4px;font-size:12px;color:#646970}.aiwc-meter__cta{margin:6px 0 0}.aiwc-preview h2{margin:0 0 8px;font-size:16px}.aiwc-preview p{margin:0 0 10px}
+      .aiwc-preview{background:#fff;border:1px solid #dcdcde;border-radius:12px;padding:16px 18px}.aiwc-usage{background:#fff;border:1px solid #dcdcde;border-radius:12px;padding:16px 18px;margin-bottom:16px;display:grid;gap:12px}.aiwc-usage h2{margin:0;font-size:15px}.aiwc-meter__row{display:flex;justify-content:space-between;gap:12px;font-size:13px}.aiwc-meter__label{color:#646970}.aiwc-meter__value{font-weight:600;text-align:right;font-variant-numeric:tabular-nums}.aiwc-meter__bar{height:6px;border-radius:3px;background:#f0f0f1;margin-top:6px;overflow:hidden}.aiwc-meter__bar span{display:block;height:100%;border-radius:3px;background:#3858e9}.aiwc-meter.is-warn .aiwc-meter__bar span{background:#dba617}.aiwc-meter.is-bad .aiwc-meter__bar span{background:#d63638}.aiwc-meter__hint{margin-top:4px;font-size:12px;color:#646970}.aiwc-meter__cta{margin:6px 0 0}.aiwc-preview h2{margin:0 0 8px;font-size:16px}.aiwc-icons{display:flex;flex-wrap:wrap;gap:8px}.aiwc-icon{position:relative;cursor:pointer}.aiwc-icon input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}.aiwc-icon__face{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:var(--aiwc-accent,#4f46e5);color:#fff;box-shadow:0 0 0 2px #fff,0 0 0 3px #dcdcde;overflow:hidden}.aiwc-icon__face svg{width:22px;height:22px}.aiwc-icon__face img{width:100%;height:100%;object-fit:cover}.aiwc-icon input:checked+.aiwc-icon__face{box-shadow:0 0 0 2px #fff,0 0 0 4px #2271b1}.aiwc-icon input:focus-visible+.aiwc-icon__face{outline:2px solid #2271b1;outline-offset:4px}.aiwc-icons__own{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 0}.aiwc-preview p{margin:0 0 10px}
       .aiwc-preview__actions .button{border-radius:8px}.aiwc-inline-preview{margin-top:12px;padding-top:12px;border-top:1px solid #f0f0f1}
       .aiwc-offset{display:inline-flex;gap:14px;flex-wrap:wrap}.aiwc-offset label{display:inline-flex;align-items:center;gap:6px;color:#50575e}.aiwc-offset input{width:84px}
       .aiwc-kb__types{display:grid;gap:8px;margin:12px 0}.aiwc-kb__more{margin:22px 0 4px;font-size:14px}.aiwc-channels{margin-top:20px;padding-top:16px;border-top:1px solid #f0f0f1}.aiwc-channels h3{margin:0 0 4px;font-size:14px}.aiwc-channels__tabs{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 10px}.aiwc-channels__tab{border:1px solid #dcdcde;background:#fff;border-radius:999px;padding:6px 14px;cursor:pointer;font:inherit;color:#1d2327}.aiwc-channels__tab.is-active{background:#2271b1;border-color:#2271b1;color:#fff}.aiwc-channels__dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#c3c4c7;margin-left:4px;vertical-align:middle}.aiwc-channels__dot--connected{background:#00a32a}.aiwc-channels__dot--error{background:#d63638}.aiwc-channels__ok{color:#00a32a;font-weight:700;margin-left:2px}.aiwc-channels__tab.is-active .aiwc-channels__ok{color:#fff}.aiwc-channels__panel{border:1px solid #dcdcde;border-radius:10px;padding:10px 16px;background:#fcfcfd}.aiwc-channels__panel .aiwc-steps{margin-bottom:8px}.aiwc-kb__type{border:1px solid #dcdcde;border-radius:10px;padding:10px 14px;background:#fcfcfd}
@@ -896,7 +916,7 @@ function aiworker_chat_admin_styles(): void {
       .aiwc-mcp__steps{margin:10px 0 6px 20px}.aiwc-mcp__copy{margin-top:6px}.aiwc-mcp__manual{margin-top:10px}.aiwc-mcp__manual summary{cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid #c3c4c7;border-radius:6px;background:#f6f7f7;color:#2271b1;font-weight:600;list-style:none}.aiwc-mcp__manual summary::-webkit-details-marker{display:none}.aiwc-mcp__manual summary::before{content:'';width:0;height:0;border-left:5px solid currentColor;border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}.aiwc-mcp__manual[open] summary::before{transform:rotate(90deg)}.aiwc-mcp__manual summary:hover{border-color:#2271b1;background:#fff}.aiwc-mcp__manual p{margin:10px 0 0}.aiwc-mcp__prompt{display:block;width:100%;margin-top:6px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
       @media (max-width:1100px){.aiwc-grid{grid-template-columns:minmax(0,1fr)}.aiwc-side{position:static}}
       @media (max-width:640px){.aiwc-row{grid-template-columns:minmax(0,1fr)}.aiwc-row__label{padding-top:0}.aiwc-card{padding:16px}}
-    </style>
+    <?php aiworker_chat_print_style('aiworker-chat-admin', (string) ob_get_clean()); ?>
     <?php
 }
 
@@ -916,6 +936,7 @@ add_action('wp_enqueue_scripts', static function (): void {
     unset($options['pages'], $options['pages_mode']);
     $options['base'] = aiworker_chat_base();
     $options['privacy_url'] = ! empty($o['privacy']) ? (string) get_privacy_policy_url() : '';
+    $options['widget_version'] = (string) get_option('aiworker_chat_widget_version', '');
     // the file's time in the version too, so visitors' browsers do not keep an old loader of the same version
     wp_enqueue_script('aiworker-chat-loader', plugins_url('loader.js', __FILE__), [], AIWORKER_CHAT_VERSION.'.'.(int) @filemtime(__DIR__.'/loader.js'), true);
     // The options ride on the loader's own tag, not in an inline script, so a CSP without 'unsafe-inline' or nonces

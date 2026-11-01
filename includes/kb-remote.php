@@ -128,7 +128,7 @@ function aiworker_chat_kb_remote_block(): void {
       </div>
       <?php endif; ?>
     </section>
-    <script>
+    <?php ob_start(); ?>
     (function (root) {
       var c = <?php echo wp_json_encode(['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_kb_remote'), 'saving' => __('Saving…', 'needtome-ai-chat'), 'done' => __('Done.', 'needtome-ai-chat'), 'failed' => __('Not saved: kra.name answered with an error. Try again a bit later.', 'needtome-ai-chat'), 'lang' => aiworker_chat_wizard_lang()]); ?>;
       var notice = root.querySelector('[data-kbr="notice"]'), add = root.querySelector('[data-kbr="add"]');
@@ -163,6 +163,6 @@ function aiworker_chat_kb_remote_block(): void {
         });
       });
     })(document.getElementById('aiwc-kbr'));
-    </script>
+    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
     <?php
 }

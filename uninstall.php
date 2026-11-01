@@ -9,6 +9,7 @@ delete_option('aiworker_chat_oauth_lock');
 delete_option('aiworker_chat_signin_links');
 delete_option('aiworker_chat_linked_chat');
 delete_option('aiworker_chat_options');
+delete_option('aiworker_chat_widget_version');
 delete_option('aiworker_chat_kb');
 delete_option('aiworker_chat_kb_queue');
 delete_option('aiworker_chat_kb_state');

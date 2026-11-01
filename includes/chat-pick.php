@@ -288,7 +288,7 @@ function aiworker_chat_popup_done(string $next): void {
     nocache_headers();
     header('Content-Type: text/html; charset=utf-8');
     ?><!doctype html><meta charset="utf-8"><title><?php esc_html_e('NeedToMe AI Chat', 'needtome-ai-chat'); ?></title>
-    <script>
+    <?php ob_start(); ?>
     (function (next) {
       try {
         var o = window.opener;
@@ -301,7 +301,7 @@ function aiworker_chat_popup_done(string $next): void {
       } catch (e) {}
       location.replace(next);
     })(<?php echo wp_json_encode($next); ?>);
-    </script>
+    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
     <?php
     exit;
 }
@@ -313,7 +313,7 @@ function aiworker_chat_popup_done(string $next): void {
 function aiworker_chat_signin_script(): void {
     $data = ['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_signin_status')];
     ?>
-    <script>
+    <?php ob_start(); ?>
     (function (d) {
       var c = <?php echo wp_json_encode($data); ?>, timer = 0, until = 0, next = '';
       function ask() {
@@ -333,6 +333,6 @@ function aiworker_chat_signin_script(): void {
       }
       d.querySelectorAll('.aiwc-signin').forEach(function (a) { ['click', 'contextmenu', 'copy', 'auxclick'].forEach(function (e) { a.addEventListener(e, watch); }); a.addEventListener('click', open); });
     })(document);
-    </script>
+    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
     <?php
 }
