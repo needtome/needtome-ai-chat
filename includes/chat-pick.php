@@ -174,6 +174,26 @@ function aiworker_chat_pick_single(): void {
 add_action('load-needtome_page_aiworker-chat', 'aiworker_chat_pick_single');
 
 /**
+ * A site whose chat key was entered by hand and which connected AI Worker later has no linked chat, so the chat's
+ * settings blocks stay hidden. The account's chat that already serves this site's domain is linked when kra.name returns
+ * the same key for it; another key is left alone and the owner chooses the chat. Tried once per ten minutes.
+ */
+function aiworker_chat_adopt_key(): void {
+    if (! current_user_can('manage_options') || ! aiworker_chat_is_connected()) return;
+    $key = (string) aiworker_chat_options()['key'];
+    if ($key === '' || (int) get_option(AIWORKER_CHAT_LINKED_OPTION, 0) > 0 || get_transient('aiworker_chat_adopt_tried')) return;
+    set_transient('aiworker_chat_adopt_tried', 1, 10 * MINUTE_IN_SECONDS);
+    $host = aiworker_chat_site_host();
+    $mine = array_values(array_filter((array) aiworker_chat_account_chats(true), static function ($c) use ($host): bool {
+        return is_array($c) && in_array($host, (array) ($c['site_domains'] ?? []), true);
+    }));
+    if (count($mine) !== 1) return;
+    $result = aiworker_chat_api('POST', '/plugin/link', ['chat_id' => (int) $mine[0]['id'], 'site' => $host]);
+    if ($result['code'] === 200 && (string) ($result['body']['key'] ?? '') === $key) update_option(AIWORKER_CHAT_LINKED_OPTION, (int) $mine[0]['id'], false);
+}
+add_action('load-needtome_page_aiworker-chat', 'aiworker_chat_adopt_key', 5);
+
+/**
  * Under the key field: the offer, or — after the button and with a connection — the account's chats to choose from.
  * Its controls belong to the forms printed by aiworker_chat_pick_forms(), outside the settings form.
  */
@@ -212,7 +232,8 @@ function aiworker_chat_pick_panel(): void {
                 }
                 echo '<p class="description">'.esc_html__('Connected automatically through AI Worker. To enter a chat key by hand, disconnect AI Worker.', 'needtome-ai-chat').'</p>';
             }
-            if ($chats === null || count($chats) > 1 || ($key === '' && $chats)) echo '<p><a href="'.esc_url(aiworker_chat_pick_url()).'">'.esc_html($key === '' ? __('Choose the chat', 'needtome-ai-chat') : __('Choose another chat', 'needtome-ai-chat')).'</a></p>';
+            // a key entered by hand that is not one of this account's chats: the owner picks the chat to set up
+            if ($chats === null || count($chats) > 1 || (($key === '' || $linked === 0) && $chats)) echo '<p><a href="'.esc_url(aiworker_chat_pick_url()).'">'.esc_html($key === '' || $linked === 0 ? __('Choose the chat', 'needtome-ai-chat') : __('Choose another chat', 'needtome-ai-chat')).'</a></p>';
             // the account it is (its email with the middle hidden, by kra.name), next to the way out of it
             $account = (array) (aiworker_chat_account_me()['account'] ?? []);
             $who = (string) ($account['email_masked'] ?? $account['name'] ?? '');
