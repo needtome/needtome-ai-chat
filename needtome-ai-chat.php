@@ -3,7 +3,7 @@
  * Plugin Name: NeedToMe AI Chat
  * Plugin URI: https://needtome.com/needtome-ai-chat/
  * Description: An AI consultant in a chat on your site: answers visitors 24/7 from your own knowledge base (site pages, documents, price lists), speaks the visitor's language, collects leads and hands a dialog over to a person. Requires an account at <a href="https://kra.name/" target="_blank" rel="noopener">kra.name</a>, where the chat, its knowledge and its answers are set up.
- * Version: 0.10.2
+ * Version: 1.0.0
  * Requires at least: 6.4
  * Requires PHP: 7.4
  * Author: Parad0x
@@ -17,7 +17,7 @@
 defined('ABSPATH') || exit;
 
 const AIWORKER_CHAT_OPTION = 'aiworker_chat_options';
-const AIWORKER_CHAT_VERSION = '0.10.2';
+const AIWORKER_CHAT_VERSION = '1.0.0';
 /** Keys of the colour schemes and of the advanced colours of the widget (the same keys as at kra.name); '' = as saved in the chat. */
 const AIWORKER_CHAT_SCHEME_KEYS = ['', 'light', 'dim', 'dark', 'auto'];
 require_once __DIR__.'/includes/kb-sync.php';

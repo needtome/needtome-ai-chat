@@ -5,7 +5,7 @@ A WordPress plugin that puts an AI consultant on your site. It answers visitors 
 The chat, its knowledge base and the leads live at [kra.name](https://kra.name/) (AI Worker): an account there is required. The plugin connects the site with one button and lets you set up the chat right in WordPress.
 
 - [Live demo and plugin guide](https://needtome.com/needtome-ai-chat/)
-- Current source version: **0.10.2**; requires WordPress 6.4+ and PHP 7.4+.
+- Current source version: **1.0.0**; requires WordPress 6.4+ and PHP 7.4+.
 
 ## What you set in WordPress
 
