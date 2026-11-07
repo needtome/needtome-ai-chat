@@ -7,7 +7,7 @@
 
 if (! defined('ABSPATH')) exit;
 
-/** The chat id linked here by «Connect», so the wizard works with that chat. */
+/** The legacy single-chat ID option, read by the migration into the first chat's settings. */
 const AIWORKER_CHAT_LINKED_OPTION = 'aiworker_chat_linked_chat';
 
 /** This site's host as kra.name's allowed sites store it. */
@@ -16,32 +16,33 @@ function aiworker_chat_site_host(): string {
 }
 
 /** Settings screen with the chat choice open. */
-function aiworker_chat_pick_url(): string {
-    return add_query_arg('aiwc_pick', '1', aiworker_chat_settings_url()).'#aiwc-pick';
+function aiworker_chat_pick_url(?string $chatId = null): string {
+    return add_query_arg('aiworker_chat_pick', '1', aiworker_chat_settings_url('', $chatId)).'#aiworker-chat-pick';
 }
 
-/** Sign-in links: random token => ['user', 'then', 'until']. */
+/** Sign-in links: random token => ['user', 'then', 'chat_id', 'until']. */
 const AIWORKER_CHAT_SIGNIN_OPTION = 'aiworker_chat_signin_links';
 
 /**
  * A plain link that starts the AI Worker sign-in, so it can be copied and opened in another browser that is signed
  * in to the right kra.name account. Its random token stands in for the WordPress session; it works once, for an hour.
- * $then = 'pick' comes back to the chat choice, '' to the wizard.
+ * $then = 'pick' comes back to the chat choice, '' to the wizard; both retain the current local chat tab.
  */
-function aiworker_chat_signin_url(string $then): string {
+function aiworker_chat_signin_url(string $then, ?string $chatId = null): string {
     $links = (array) get_option(AIWORKER_CHAT_SIGNIN_OPTION, []);
     $user = get_current_user_id();
+    $chatId = $chatId !== null && in_array($chatId, aiworker_chat_ids(), true) ? $chatId : aiworker_chat_current_id();
     $token = '';
     foreach ($links as $t => $l) {
         if (! is_array($l) || (int) ($l['until'] ?? 0) < time()) unset($links[$t]);
-        elseif ((int) $l['user'] === $user && $l['then'] === $then && (int) $l['until'] > time() + 10 * MINUTE_IN_SECONDS) $token = (string) $t;
+        elseif ((int) $l['user'] === $user && ($l['then'] ?? '') === $then && ($l['chat_id'] ?? '') === $chatId && (int) $l['until'] > time() + 10 * MINUTE_IN_SECONDS) $token = (string) $t;
     }
     if ($token === '') {
         $token = bin2hex(random_bytes(16));
-        $links[$token] = ['user' => $user, 'then' => $then, 'until' => time() + HOUR_IN_SECONDS];
+        $links[$token] = ['user' => $user, 'then' => $then, 'chat_id' => $chatId, 'until' => time() + HOUR_IN_SECONDS];
     }
     update_option(AIWORKER_CHAT_SIGNIN_OPTION, $links, false);
-    return add_query_arg(['action' => 'aiwc_signin', 't' => $token], admin_url('admin-post.php'));
+    return add_query_arg(['action' => 'aiworker_chat_signin', 't' => $token], admin_url('admin-post.php'));
 }
 
 /** admin-post (with or without a WordPress session): open a sign-in link. */
@@ -66,32 +67,35 @@ function aiworker_chat_signin_open(): void {
     }
     if (aiworker_chat_is_connected() && current_user_can('manage_options')) {
         if ((string) $link['then'] === 'pick') aiworker_chat_autolink_mark((int) $link['user']);
-        if ($popup) aiworker_chat_popup_done(aiworker_chat_signin_next((string) $link['then']));
-        wp_safe_redirect(aiworker_chat_signin_next((string) $link['then']));
+        if ($popup) aiworker_chat_popup_done(aiworker_chat_signin_next((string) $link['then'], (string) ($link['chat_id'] ?? '')));
+        wp_safe_redirect(aiworker_chat_signin_next((string) $link['then'], (string) ($link['chat_id'] ?? '')));
         exit;
     }
-    aiworker_chat_oauth_begin((string) $link['then'], (int) $link['user'], true, $popup);
+    aiworker_chat_oauth_begin((string) $link['then'], (int) $link['user'], true, $popup, (string) ($link['chat_id'] ?? ''));
 }
-add_action('admin_post_aiwc_signin', 'aiworker_chat_signin_open');
-add_action('admin_post_nopriv_aiwc_signin', 'aiworker_chat_signin_open');
+add_action('admin_post_aiworker_chat_signin', 'aiworker_chat_signin_open');
+add_action('admin_post_nopriv_aiworker_chat_signin', 'aiworker_chat_signin_open');
 
 /** AJAX: has the sign-in finished (in this or another browser)? The settings screen asks while a link is in use. */
 function aiworker_chat_signin_status(): void {
     if (! current_user_can('manage_options')) wp_send_json_error(null, 403);
-    check_ajax_referer('aiwc_signin_status', 'nonce');
+    check_ajax_referer('aiworker_chat_signin_status', 'nonce');
     wp_send_json_success(['connected' => aiworker_chat_oauth_tokens(true) !== null]);
 }
-add_action('wp_ajax_aiwc_signin_status', 'aiworker_chat_signin_status');
+add_action('wp_ajax_aiworker_chat_signin_status', 'aiworker_chat_signin_status');
 
 /** Links the chat to this site and saves its key; returns the notice to show. */
 function aiworker_chat_link_chat(int $chat): string {
     $result = $chat > 0 ? aiworker_chat_api('POST', '/plugin/link', ['chat_id' => $chat, 'site' => aiworker_chat_site_host()]) : ['code' => 422, 'body' => [], 'error' => ''];
     $key = (string) ($result['body']['key'] ?? '');
     if ($result['code'] === 200 && aiworker_chat_valid_key($key)) {
-        $o = aiworker_chat_options();
-        $o['key'] = $key;
-        update_option(AIWORKER_CHAT_OPTION, $o);
-        update_option(AIWORKER_CHAT_LINKED_OPTION, $chat, false);   // the chat the wizard focuses on
+        $id = aiworker_chat_add($key, $chat, sanitize_text_field((string) ($result['body']['chat']['name'] ?? '')));
+        if ($id === '') return 'link_failed';
+        // Learn this chat's greeting choice before its first public page; public requests never fetch it.
+        $settings = aiworker_chat_api('GET', '/plugin/chat', ['chat_id' => $chat, 'lang' => aiworker_chat_wizard_lang()]);
+        if ($settings['code'] === 200 && is_array($settings['body']['chat'] ?? null)) {
+            aiworker_chat_with($id, static function () use ($settings): void { aiworker_chat_remember_remote($settings['body']['chat']); });
+        }
         $notice = 'linked';
     } elseif (in_array($result['code'], [404, 405], true) && empty($result['body']['code'])) {
         $notice = 'link_unsupported';   // a kra.name without /plugin/link
@@ -108,17 +112,24 @@ function aiworker_chat_link_chat(int $chat): string {
 /** admin-post: «Connect» — link the chosen chat to this site and save its key. */
 function aiworker_chat_pick_link(): void {
     if (! current_user_can('manage_options')) wp_die(esc_html__('You are not allowed to do this.', 'needtome-ai-chat'), 403);
-    check_admin_referer('aiwc_chat_link');
-    $chat = isset($_POST['chat_id']) ? absint(wp_unslash((string) $_POST['chat_id'])) : 0;
-    wp_safe_redirect(add_query_arg('aiw_notice', aiworker_chat_link_chat($chat), aiworker_chat_settings_url()));
+    check_admin_referer('aiworker_chat_chat_link');
+    // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- IDs are individually converted to positive integers.
+    $chosen = (array) wp_unslash($_POST['chat_ids'] ?? $_POST['chat_id'] ?? []);
+    $notices = [];
+    foreach (array_unique(array_map('absint', array_filter($chosen, 'is_scalar'))) as $chat) if ($chat > 0) $notices[$chat] = aiworker_chat_link_chat($chat);
+    // a chat added from the list opens at once; a failure comes back to the choice, which says why
+    if (! empty($_POST['adding']) && $notices && ! array_diff($notices, ['linked'])) {
+        foreach (aiworker_chat_chats() as $saved) {
+            if ((int) $saved['chat_id'] !== (int) array_key_last($notices)) continue;
+            wp_safe_redirect(add_query_arg('aiworker_chat_instance', $saved['id'], Aiworker_Chat_Profile::url('aiworker-chat')));
+            exit;
+        }
+    }
+    set_transient('aiworker_chat_link_results_'.get_current_user_id(), $notices, 10 * MINUTE_IN_SECONDS);
+    wp_safe_redirect(add_query_arg('aiworker_chat_pick', '1', aiworker_chat_settings_url()));
     exit;
 }
-add_action('admin_post_aiwc_chat_link', 'aiworker_chat_pick_link');
-
-/** Drops the cached /plugin/me in every language (after a connection, a disconnection or a change of the chat). */
-function aiworker_chat_forget_me(): void {
-    foreach (['ru', 'en', 'uk'] as $lang) delete_transient('aiworker_chat_me_'.$lang);
-}
+add_action('admin_post_aiworker_chat_chat_link', 'aiworker_chat_pick_link');
 
 /** The connected kra.name account (/plugin/me, cached 5 minutes): ['account' => …, 'chats' => […]]; null when it cannot be read. */
 function aiworker_chat_account_me(bool $fresh = false): ?array {
@@ -139,18 +150,18 @@ function aiworker_chat_account_chats(bool $fresh = false): ?array {
     return $me === null ? null : $me['chats'];
 }
 
-/** Whether the chat choice is open: asked for (aiwc_pick=1), or no key yet and not cancelled (aiwc_pick=0). */
+/** Whether the chat choice is open: asked for (aiworker_chat_pick=1), or no key yet and not cancelled (aiworker_chat_pick=0). */
 function aiworker_chat_pick_open(): bool {
     if (! aiworker_chat_is_connected()) return false;
     // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only switch from our own links.
-    $pick = isset($_GET['aiwc_pick']) ? sanitize_key(wp_unslash((string) $_GET['aiwc_pick'])) : '';
+    $pick = isset($_GET['aiworker_chat_pick']) ? sanitize_key(wp_unslash((string) $_GET['aiworker_chat_pick'])) : '';
     return $pick === '1' || ($pick === '' && (string) aiworker_chat_options()['key'] === '');
 }
 
 /**
  * A one-time mark that the administrator has just finished the sign-in started with «Choose the chat automatically»
  * (10 minutes). Only with it does the settings screen link the account's only chat by itself: a plain link to the
- * screen (aiwc_pick=1) cannot change the key; it only opens the choice, whose «Connect» is a POST with a nonce.
+ * screen (aiworker_chat_pick=1) cannot change the key; it only opens the choice, whose «Connect» is a POST with a nonce.
  */
 function aiworker_chat_autolink_mark(int $user): void {
     if ($user > 0) set_transient('aiworker_chat_autolink_'.$user, 1, 10 * MINUTE_IN_SECONDS);
@@ -162,13 +173,13 @@ function aiworker_chat_autolink_mark(int $user): void {
  */
 function aiworker_chat_pick_single(): void {
     // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only opens the choice; linking needs the one-time mark below.
-    if (isset($_GET['aiw_notice']) || ! current_user_can('manage_options') || ! aiworker_chat_pick_open()) return;
+    if (isset($_GET['aiworker_chat_notice']) || ! current_user_can('manage_options') || ! aiworker_chat_pick_open()) return;
     $mark = 'aiworker_chat_autolink_'.get_current_user_id();
     if (! get_transient($mark)) return;
     delete_transient($mark);
     $chats = aiworker_chat_account_chats(true);
-    if (! $chats || count($chats) !== 1) return;
-    wp_safe_redirect(add_query_arg('aiw_notice', aiworker_chat_link_chat((int) $chats[0]['id']), aiworker_chat_settings_url()));
+    if (! $chats || count($chats) !== 1 || in_array((int) $chats[0]['id'], array_column(aiworker_chat_chats(), 'chat_id'), true)) return;
+    wp_safe_redirect(add_query_arg('aiworker_chat_notice', aiworker_chat_link_chat((int) $chats[0]['id']), aiworker_chat_settings_url()));
     exit;
 }
 add_action('load-needtome_page_aiworker-chat', 'aiworker_chat_pick_single');
@@ -181,15 +192,20 @@ add_action('load-needtome_page_aiworker-chat', 'aiworker_chat_pick_single');
 function aiworker_chat_adopt_key(): void {
     if (! current_user_can('manage_options') || ! aiworker_chat_is_connected()) return;
     $key = (string) aiworker_chat_options()['key'];
-    if ($key === '' || (int) get_option(AIWORKER_CHAT_LINKED_OPTION, 0) > 0 || get_transient('aiworker_chat_adopt_tried')) return;
-    set_transient('aiworker_chat_adopt_tried', 1, 10 * MINUTE_IN_SECONDS);
+    if ($key === '' || aiworker_chat_linked_id() > 0 || get_transient(aiworker_chat_option_name('aiworker_chat_adopt_tried'))) return;
+    set_transient(aiworker_chat_option_name('aiworker_chat_adopt_tried'), 1, 10 * MINUTE_IN_SECONDS);
     $host = aiworker_chat_site_host();
     $mine = array_values(array_filter((array) aiworker_chat_account_chats(true), static function ($c) use ($host): bool {
         return is_array($c) && in_array($host, (array) ($c['site_domains'] ?? []), true);
     }));
     if (count($mine) !== 1) return;
     $result = aiworker_chat_api('POST', '/plugin/link', ['chat_id' => (int) $mine[0]['id'], 'site' => $host]);
-    if ($result['code'] === 200 && (string) ($result['body']['key'] ?? '') === $key) update_option(AIWORKER_CHAT_LINKED_OPTION, (int) $mine[0]['id'], false);
+    if ($result['code'] === 200 && (string) ($result['body']['key'] ?? '') === $key) {
+        $o = aiworker_chat_options();
+        $o['chat_id'] = (int) $mine[0]['id'];
+        $o['name'] = sanitize_text_field((string) ($mine[0]['chat_name'] ?? $mine[0]['name'] ?? ''));
+        aiworker_chat_store(AIWORKER_CHAT_OPTION, $o);
+    }
 }
 add_action('load-needtome_page_aiworker-chat', 'aiworker_chat_adopt_key', 5);
 
@@ -197,11 +213,13 @@ add_action('load-needtome_page_aiworker-chat', 'aiworker_chat_adopt_key', 5);
  * Under the key field: the offer, or — after the button and with a connection — the account's chats to choose from.
  * Its controls belong to the forms printed by aiworker_chat_pick_forms(), outside the settings form.
  */
-function aiworker_chat_pick_panel(): void {
-    $key = (string) aiworker_chat_options()['key'];
+function aiworker_chat_pick_html(bool $adding = false): string {
+    $html = '';
+    $key = $adding ? '' : (string) aiworker_chat_options()['key'];
     $connected = aiworker_chat_is_connected();
-    $open = aiworker_chat_pick_open();
-    echo '<div class="aiwc-pick" id="aiwc-pick">';
+    if ($adding && ! $connected) return ''; // nothing to choose from: the new row takes a key by hand
+    $open = $adding || aiworker_chat_pick_open();
+    $html .= '<div class="aiworker-chat-pick" id="aiworker-chat-pick">';
     $label = static function (array $c): string {
         $name = (string) ($c['chat_name'] ?? $c['name'] ?? '');
         $persona = (string) ($c['persona']['name'] ?? '');
@@ -211,94 +229,124 @@ function aiworker_chat_pick_panel(): void {
     if (! $open) {
         if (! $connected) {
             $then = $key === '' ? 'pick' : '';
-            echo '<h3>'.esc_html($key === '' ? __('Connect automatically', 'needtome-ai-chat') : __('Setup wizard', 'needtome-ai-chat')).'</h3>';
-            if ($key !== '') echo '<p>'.esc_html__('Sign in to AI Worker to set up this chat from the site with the setup wizard and see its statistics.', 'needtome-ai-chat').'</p>';
-            echo '<p>'.aiworker_chat_signin_link($then, $key === '' ? __('Choose the chat automatically', 'needtome-ai-chat') : __('Sign in to AI Worker', 'needtome-ai-chat')).'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from escaped parts.
-            if ($key === '') echo '<p class="description">'.esc_html__('Click the link and choose the chat you need from your kra.name chats (if you are not signed in, you will be asked to sign in).', 'needtome-ai-chat').'</p>';
+            $html .= '<h3>'.esc_html($key === '' ? __('Connect automatically', 'needtome-ai-chat') : __('Setup wizard', 'needtome-ai-chat')).'</h3>';
+            if ($key !== '') $html .= '<p>'.esc_html__('Sign in to AI Worker to use the setup wizard, statistics, chat settings, knowledge sync and catalog sync.', 'needtome-ai-chat').'</p>';
+            $html .= '<p>'.aiworker_chat_signin_link($then, $key === '' ? __('Choose the chat automatically', 'needtome-ai-chat') : __('Sign in to AI Worker', 'needtome-ai-chat')).'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from escaped parts.
+            if ($key === '') $html .= '<p class="description">'.esc_html__('Click the link and choose the chat you need from your kra.name chats (if you are not signed in, you will be asked to sign in).', 'needtome-ai-chat').'</p>';
         } else {
             // the linked chat by name; nothing to choose from with one chat; with none, the key field and the wizard say what to do
             $chats = aiworker_chat_account_chats();
-            $linked = (int) get_option(AIWORKER_CHAT_LINKED_OPTION, 0);
+            $linked = aiworker_chat_linked_id();
             foreach ((array) $chats as $c) {
                 if ($key === '' || (int) ($c['id'] ?? 0) !== $linked) continue;
                 $persona = (string) ($c['persona']['name'] ?? '');
                 // with one chat its name says nothing: the consultant does
                 if (count($chats) === 1 && $persona !== '') {
                     /* translators: %s: consultant name */
-                    echo '<h3>'.esc_html(sprintf(__('This site\'s chat: consultant %s', 'needtome-ai-chat'), $persona)).'</h3>';
+                    $html .= '<h3>'.esc_html(sprintf(__('This site\'s chat: consultant %s', 'needtome-ai-chat'), $persona)).'</h3>';
                 } else {
                     /* translators: %s: chat name with its consultant */
-                    echo '<h3>'.esc_html(sprintf(__('This site\'s chat: %s', 'needtome-ai-chat'), $label($c))).'</h3>';
+                    $html .= '<h3>'.esc_html(sprintf(__('This site\'s chat: %s', 'needtome-ai-chat'), $label($c))).'</h3>';
                 }
-                echo '<p class="description">'.esc_html__('Connected automatically through AI Worker. To enter a chat key by hand, disconnect AI Worker.', 'needtome-ai-chat').'</p>';
+                $html .= '<p class="description">'.esc_html__('Connected automatically through AI Worker. To enter a chat key by hand, disconnect AI Worker.', 'needtome-ai-chat').'</p>';
             }
             // a key entered by hand that is not one of this account's chats: the owner picks the chat to set up
-            if ($chats === null || count($chats) > 1 || (($key === '' || $linked === 0) && $chats)) echo '<p><a href="'.esc_url(aiworker_chat_pick_url()).'">'.esc_html($key === '' || $linked === 0 ? __('Choose the chat', 'needtome-ai-chat') : __('Choose another chat', 'needtome-ai-chat')).'</a></p>';
+            if ($chats === null || count($chats) > 1 || (($key === '' || $linked === 0) && $chats)) $html .= '<p><a href="'.esc_url(aiworker_chat_pick_url()).'">'.esc_html($key === '' || $linked === 0 ? __('Choose the chat', 'needtome-ai-chat') : __('Choose another chat', 'needtome-ai-chat')).'</a></p>';
             // the account it is (its email with the middle hidden, by kra.name), next to the way out of it
             $account = (array) (aiworker_chat_account_me()['account'] ?? []);
             $who = (string) ($account['email_masked'] ?? $account['name'] ?? '');
             $plan = (string) ($account['plan_name'] ?? '');
-            echo '<p class="aiwc-pick__account"><span class="aiwc-pill aiwc-pill--ok">'.esc_html__('AI Worker connected', 'needtome-ai-chat').'</span>'
-                .($who !== '' ? ' <span class="aiwc-aw__account">'.esc_html($who.($plan !== '' ? ' · '.$plan : '')).'</span>' : '')
-                .' <button type="submit" form="aiwc-disconnect-form" class="button">'.esc_html__('Disconnect AI Worker', 'needtome-ai-chat').'</button></p>';
-            echo '<p class="description">'.esc_html__('The chat on the site keeps working; only the wizard and the statistics need the connection.', 'needtome-ai-chat').'</p>';
+            $html .= '<p class="aiworker-chat-pick__account"><span class="aiworker-chat-pill aiworker-chat-pill--ok">'.esc_html__('AI Worker connected', 'needtome-ai-chat').'</span>'
+                .($who !== '' ? ' <span class="aiworker-chat-aw__account">'.esc_html($who.($plan !== '' ? ' · '.$plan : '')).'</span>' : '')
+                .' <button type="submit" form="aiworker-chat-disconnect-form" class="button">'.esc_html__('Disconnect AI Worker', 'needtome-ai-chat').'</button></p>';
+            $html .= '<p class="description">'.esc_html__('The chat on the site keeps working after disconnecting. The setup wizard, statistics, chat settings blocks, knowledge sync and catalog sync need the AI Worker connection.', 'needtome-ai-chat').'</p>';
         }
-        echo '</div>';
-        return;
+        $html .= '</div>';
+        return $html;
     }
     $chats = aiworker_chat_account_chats(true);
     $host = aiworker_chat_site_host();
-    $cancel = '<a href="'.esc_url(add_query_arg('aiwc_pick', '0', aiworker_chat_settings_url())).'">'.esc_html__('Cancel', 'needtome-ai-chat').'</a>';
+    $cancel = '<a href="'.esc_url(add_query_arg('aiworker_chat_pick', '0', aiworker_chat_settings_url())).'">'.esc_html__('Cancel', 'needtome-ai-chat').'</a>';
+    // «Add another chat» opened an empty chat: cancelling takes it away again
+    if ($key === '' && count(aiworker_chat_ids()) > 1) $cancel = '<button type="submit" class="button-link" form="aiworker-chat-list-form" name="remove" value="'.esc_attr(aiworker_chat_current_id()).'">'.esc_html__('Cancel', 'needtome-ai-chat').'</button>';
+    // the new chat exists only on the page
+    if ($adding) {
+        $cancel = '<button type="button" class="button-link" data-aiworker-chat-add-cancel>'.esc_html__('Cancel', 'needtome-ai-chat').'</button>';
+        $html .= '<input type="hidden" form="aiworker-chat-link-form" name="adding" value="1">';
+    }
+    // an empty chat can only take a chat that is not on this site yet
+    $free = $chats;
+    if ($key === '' && $chats) {
+        $taken = array_column(aiworker_chat_chats(), 'chat_id');
+        $free = array_values(array_filter($chats, static function (array $c) use ($taken): bool { return ! in_array((int) ($c['id'] ?? 0), $taken, true); }));
+    }
+    if ($chats && ! $free) {
+        $html .= '<p>'.wp_kses(sprintf(
+            /* translators: %s: link to the kra.name panel */
+            __('All chats of your AI Worker account are already on this site. Create another one in the %s, then add it here.', 'needtome-ai-chat'),
+            '<a href="https://kra.name/app/panel" target="_blank" rel="noopener">'.esc_html__('kra.name panel', 'needtome-ai-chat').'</a>'), ['a' => ['href' => [], 'target' => [], 'rel' => []]]).' '.$cancel.'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped above.
+        $html .= '</div>';
+        return $html;
+    }
+    $chats = $free;
     if ($chats === null) {
-        echo '<p class="aiwc-pick__error">'.esc_html__('The list of chats could not be loaded from kra.name. Try again in a minute.', 'needtome-ai-chat').' '.$cancel.'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped above.
+        $html .= '<p class="aiworker-chat-pick__error">'.esc_html__('The list of chats could not be loaded from kra.name. Try again in a minute.', 'needtome-ai-chat').' '.$cancel.'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped above.
     } elseif (! $chats) {
-        echo '<p>'.wp_kses(sprintf(
+        $html .= '<p>'.wp_kses(sprintf(
             /* translators: %s: link to the kra.name panel */
             __('Your AI Worker account has no online chat yet. Create one in the %s, then choose it here.', 'needtome-ai-chat'),
             '<a href="https://kra.name/app/panel" target="_blank" rel="noopener">'.esc_html__('kra.name panel', 'needtome-ai-chat').'</a>'), ['a' => ['href' => [], 'target' => [], 'rel' => []]]).' '.$cancel.'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped above.
     } elseif (count($chats) === 1) {
-        echo '<input type="hidden" form="aiwc-link-form" name="chat_id" value="'.esc_attr((string) (int) $chats[0]['id']).'">';
+        $results = (array) get_transient('aiworker_chat_link_results_'.get_current_user_id());
+        $notice = $results[(int) $chats[0]['id']] ?? '';
+        if (isset(aiworker_chat_assistant_notices()[$notice])) $html .= '<p class="aiworker-chat-pick__error">'.esc_html(aiworker_chat_assistant_notices()[$notice][1]).'</p>';
+        $html .= '<input type="hidden" form="aiworker-chat-link-form" name="chat_id" value="'.esc_attr((string) (int) $chats[0]['id']).'">';
         /* translators: 1: this site's domain, 2: chat name */
-        echo '<p><strong>'.esc_html(sprintf(__('Connect %1$s to the chat «%2$s»?', 'needtome-ai-chat'), $host, $label($chats[0]))).'</strong></p>';
-        echo '<p><button type="submit" form="aiwc-link-form" class="button button-primary">'.esc_html__('Connect', 'needtome-ai-chat').'</button> '.$cancel.'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped above.
+        $html .= '<p><strong>'.esc_html(sprintf(__('Connect %1$s to the chat «%2$s»?', 'needtome-ai-chat'), $host, $label($chats[0]))).'</strong></p>';
+        $html .= '<p><button type="submit" form="aiworker-chat-link-form" class="button button-primary">'.esc_html__('Connect', 'needtome-ai-chat').'</button> '.$cancel.'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped above.
     } else {
-        /* translators: %s: this site's domain */
-        echo '<p><label for="aiwc-pick-chat"><strong>'.esc_html(sprintf(__('Which chat should %s use?', 'needtome-ai-chat'), $host)).'</strong></label></p><p><select id="aiwc-pick-chat" form="aiwc-link-form" name="chat_id">';
+        $html .= '<p><strong>'.esc_html__('Choose the chats for this site', 'needtome-ai-chat').'</strong></p>';
+        $results = (array) get_transient('aiworker_chat_link_results_'.get_current_user_id());
+        $notices = aiworker_chat_assistant_notices();
+        $linked = array_column(aiworker_chat_chats(), 'chat_id');
         foreach ($chats as $c) {
-            $domains = (array) ($c['site_domains'] ?? []);
-            echo '<option value="'.esc_attr((string) (int) $c['id']).'"'.selected(in_array($host, $domains, true), true, false).'>'.esc_html($label($c)).'</option>';
+            $id = (int) $c['id'];
+            $html .= '<p><label><input type="checkbox" form="aiworker-chat-link-form" name="chat_ids[]" value="'.esc_attr((string) $id).'"'.checked(in_array($id, $linked, true), true, false).'> '.esc_html($label($c)).'</label>';
+            if (isset($results[$id], $notices[$results[$id]])) $html .= ' <span class="'.($results[$id] === 'linked' ? 'description' : 'aiworker-chat-pick__error').'">'.esc_html($notices[$results[$id]][1]).'</span>';
+            $html .= '</p>';
         }
-        echo '</select> <button type="submit" form="aiwc-link-form" class="button button-primary">'.esc_html__('Connect', 'needtome-ai-chat').'</button> '.$cancel.'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped above.
+        $html .= '<p><button type="submit" form="aiworker-chat-link-form" class="button button-primary">'.esc_html__('Connect', 'needtome-ai-chat').'</button> '.$cancel.'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped above.
     }
-    echo '</div>';
+    return $html.'</div>';
+}
+
+function aiworker_chat_pick_panel(): void {
+    echo aiworker_chat_pick_html(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from escaped parts.
 }
 
 /** The form the chat choice submits; printed after the settings form, since forms cannot nest. */
 function aiworker_chat_pick_forms(): void {
-    foreach (['aiwc-link-form' => 'aiwc_chat_link'] as $id => $action) {
+    foreach (['aiworker-chat-link-form' => 'aiworker_chat_chat_link'] as $id => $action) {
         echo '<form id="'.esc_attr($id).'" method="post" action="'.esc_url(admin_url('admin-post.php')).'" hidden><input type="hidden" name="action" value="'.esc_attr($action).'">';
+        aiworker_chat_context_field();
         wp_nonce_field($action);
         echo '</form>';
     }
 }
 
 /** Where the settings screen goes once a sign-in started there has finished. */
-function aiworker_chat_signin_next(string $then): string {
-    if ($then === 'pick') return aiworker_chat_pick_url();
-    if ($then === 'kb') return add_query_arg('tab', 'kb', aiworker_chat_settings_url());
-    if ($then === 'telegram') return add_query_arg('aiwc_sub', 'telegram', aiworker_chat_settings_url()).'#aiwc-wizard';
-    return aiworker_chat_settings_url('connected');
+function aiworker_chat_signin_next(string $then, string $chatId = ''): string {
+    if (! in_array($chatId, aiworker_chat_ids(), true)) $chatId = aiworker_chat_current_id();
+    if ($then === 'pick') return aiworker_chat_pick_url($chatId);
+    if ($then === 'kb') return add_query_arg('tab', 'kb', aiworker_chat_settings_url('', $chatId));
+    if ($then === 'telegram') return add_query_arg('aiworker_chat_sub', 'telegram', aiworker_chat_settings_url('', $chatId)).'#aiworker-chat-wizard';
+    return aiworker_chat_settings_url('connected', $chatId);
 }
 
-/** The sign-in link as a button; the first one on the screen also prints the script that waits for the sign-in. */
+/** The sign-in link as a button; assets/admin/signin.js handles waiting for a sign-in opened in another browser. */
 function aiworker_chat_signin_link(string $then, string $label): string {
-    static $script = false;
-    $html = '<a class="button button-primary aiwc-signin" href="'.esc_url(aiworker_chat_signin_url($then)).'" data-next="'.esc_url(aiworker_chat_signin_next($then)).'">'.esc_html($label).'</a>';
-    if (! $script) {
-        $script = true;
-        add_action('admin_footer', 'aiworker_chat_signin_script');
-    }
-    return $html;
+    $chatId = aiworker_chat_current_id();
+    return '<a class="button button-primary aiworker-chat-signin" href="'.esc_url(aiworker_chat_signin_url($then, $chatId)).'" data-next="'.esc_url(aiworker_chat_signin_next($then, $chatId)).'">'.esc_html($label).'</a>';
 }
 
 /**
@@ -308,52 +356,9 @@ function aiworker_chat_signin_link(string $then, string $label): string {
 function aiworker_chat_popup_done(string $next): void {
     nocache_headers();
     header('Content-Type: text/html; charset=utf-8');
-    ?><!doctype html><meta charset="utf-8"><title><?php esc_html_e('NeedToMe AI Chat', 'needtome-ai-chat'); ?></title>
-    <?php ob_start(); ?>
-    (function (next) {
-      try {
-        var o = window.opener;
-        if (o && ! o.closed && o.location.host === location.host) {
-          o.location.href = next;
-          if (next.split('#')[0] === o.location.href.split('#')[0]) o.location.reload();
-          window.close();
-          return;
-        }
-      } catch (e) {}
-      location.replace(next);
-    })(<?php echo wp_json_encode($next); ?>);
-    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
-    <?php
+    echo '<!doctype html><meta charset="utf-8"><title>'.esc_html__('NeedToMe AI Chat', 'needtome-ai-chat').'</title>';
+    wp_enqueue_script('aiworker-chat-popup', aiworker_chat_asset_url('assets/admin/popup.js'), [], aiworker_chat_asset_version('assets/admin/popup.js'), false);
+    wp_add_inline_script('aiworker-chat-popup', 'window.aiworkerChatPopup = '.wp_json_encode(['next' => $next]).';', 'before');
+    wp_print_scripts('aiworker-chat-popup');
     exit;
-}
-
-/**
- * The sign-in opens in a popup so the settings screen stays where it is (a new tab if the browser refuses the popup).
- * While a link is in use (clicked, copied, right-clicked), ask every few seconds and go on once it is done.
- */
-function aiworker_chat_signin_script(): void {
-    $data = ['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_signin_status')];
-    ?>
-    <?php ob_start(); ?>
-    (function (d) {
-      var c = <?php echo wp_json_encode($data); ?>, timer = 0, until = 0, next = '';
-      function ask() {
-        if (Date.now() > until) { clearInterval(timer); timer = 0; return; }
-        if (document.hidden) return;
-        var b = new FormData(); b.append('action', 'aiwc_signin_status'); b.append('nonce', c.nonce);
-        fetch(c.ajax, {method: 'POST', body: b, credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (r) {
-          if (r && r.success && r.data.connected) { clearInterval(timer); location.href = next; if (next.split('#')[0] === location.href.split('#')[0]) location.reload(); }
-        }).catch(function () {});
-      }
-      function watch(e) { next = e.currentTarget.getAttribute('data-next'); until = Date.now() + 60 * 60 * 1000; if (! timer) timer = setInterval(ask, 4000); }
-      function open(e) {
-        if (e.button || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;   // the owner's own new tab or window
-        var w = 560, h = 760, x = Math.max(0, (screen.availWidth - w) / 2), y = Math.max(0, (screen.availHeight - h) / 2);
-        var p = window.open(e.currentTarget.href + '&popup=1', 'aiwc-signin', 'popup,width=' + w + ',height=' + h + ',left=' + x + ',top=' + y);
-        if (p) { e.preventDefault(); p.focus(); } else { e.currentTarget.target = '_blank'; }
-      }
-      d.querySelectorAll('.aiwc-signin').forEach(function (a) { ['click', 'contextmenu', 'copy', 'auxclick'].forEach(function (e) { a.addEventListener(e, watch); }); a.addEventListener('click', open); });
-    })(document);
-    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
-    <?php
 }

@@ -33,6 +33,23 @@ function aiworker_chat_products_all_ids(?array $kb = null): array {
     }));
 }
 
+/** WooCommerce product dates use post_modified_gmt; include variation dates because their data is in the parent record. */
+function aiworker_chat_products_markers(array $ids): array {
+    $rows = aiworker_chat_kb_marker_rows($ids, true);
+    $children = [];
+    foreach ($rows as $row) if ($row->post_type === 'product_variation') $children[(int) $row->post_parent][] = [(int) $row->ID, (string) $row->post_status, (string) $row->post_modified_gmt];
+    $markers = [];
+    foreach ($ids as $id) {
+        $id = (int) $id; $row = $rows[$id] ?? null;
+        if (! $row || $row->post_type !== 'product') continue;
+        $variations = $children[$id] ?? [];
+        usort($variations, static function (array $a, array $b): int { return $a[0] <=> $b[0]; });
+        $markers[(string) $id] = aiworker_chat_kb_hash_value(['modified_gmt' => (string) $row->post_modified_gmt, 'status' => (string) $row->post_status,
+            'password' => (string) $row->post_password, 'variations' => $variations]);
+    }
+    return $markers;
+}
+
 /** A WooCommerce amount as a plain decimal string, or null when there is none. */
 function aiworker_chat_products_amount($value): ?string {
     if ($value === '' || $value === null || ! is_numeric($value)) return null;
@@ -90,7 +107,7 @@ function aiworker_chat_products_extra(WP_Post $post, array $cfg): array {
     }
     foreach ((array) ($cfg['meta'] ?? []) as $key) {
         if (aiworker_chat_kb_secret_name((string) $key)) continue;
-        $v = aiworker_chat_kb_text(maybe_unserialize(get_post_meta($post->ID, $key, true)));
+        $v = aiworker_chat_kb_text(get_post_meta($post->ID, $key, true));
         if ($v !== '') $out[$key] = [$v];
     }
     if (! empty($cfg['acf']) && function_exists('get_field_object')) {
@@ -180,13 +197,32 @@ function aiworker_chat_products_fit(array $record, int $limit): ?array {
     return aiworker_chat_products_size($record) > $limit ? null : $record;
 }
 
-/**
- * Sends records in requests of at most 50 products and variations and about 1.5 MB. A product with more variations
- * than fit, by count or by size, goes in several requests, each with the product itself, the same full variation_ids
- * and the next variations. A product or variation too large on its own is shortened, or skipped as «too_large»;
- * a request kra.name still finds too large (413) marks its records «batch_too_large», so one product never blocks the queue.
- */
-function aiworker_chat_products_send(array $records, array &$rejected, string $token): string {
+/** Prepares records as they will be sent: oversized variations are skipped and the others go in bounded pieces. */
+function aiworker_chat_products_prepare(array $records, array &$rejected): array {
+    $limit = AIWORKER_CHAT_KB_REQUEST_BYTES;
+    $pieces = [];
+    foreach ($records as $record) {
+        $parent = aiworker_chat_products_fit(array_merge($record, ['variations' => []]), (int) ($limit * 0.5));
+        if (! $parent) { $rejected[$record['id']] = 'too_large'; continue; }
+        $parentSize = aiworker_chat_products_size($parent);
+        $variations = []; $varBytes = 0;
+        foreach ((array) ($record['variations'] ?? []) as $original) {
+            $v = aiworker_chat_products_fit($original, $limit - $parentSize - 64);
+            if (! $v) { $rejected[$record['id'].'#'.$original['id']] = 'too_large'; continue; }
+            $vSize = aiworker_chat_products_size($v) + 1;
+            if ($variations && (count($variations) >= AIWORKER_CHAT_PRODUCTS_RECORDS - 1 || $parentSize + $varBytes + $vSize > $limit)) {
+                $pieces[] = array_merge($parent, ['variations' => $variations]);
+                $variations = []; $varBytes = 0;
+            }
+            $variations[] = $v; $varBytes += $vSize;
+        }
+        $pieces[] = array_merge($parent, ['variations' => $variations]);
+    }
+    return $pieces;
+}
+
+/** Sends the already normalized wire records; hashing these records matches what the endpoint receives. */
+function aiworker_chat_products_send(array $pieces, array &$rejected, string $token): string {
     $limit = AIWORKER_CHAT_KB_REQUEST_BYTES;
     $batch = []; $count = 0; $bytes = 0;
     $flush = static function () use (&$batch, &$count, &$bytes, &$rejected, $token): string {
@@ -210,26 +246,7 @@ function aiworker_chat_products_send(array $records, array &$rejected, string $t
         $batch[] = $piece; $count += 1 + count($piece['variations']); $bytes += $size;
         return '';
     };
-    foreach ($records as $record) {
-        $parent = aiworker_chat_products_fit(array_merge($record, ['variations' => []]), (int) ($limit * 0.5));
-        if (! $parent) {
-            $rejected[$record['id']] = 'too_large';
-            continue;
-        }
-        $parentSize = aiworker_chat_products_size($parent);
-        $variations = []; $varBytes = 0;
-        foreach ((array) ($record['variations'] ?? []) as $original) {
-            $v = aiworker_chat_products_fit($original, $limit - $parentSize - 64);
-            if (! $v) { $rejected[$record['id'].'#'.$original['id']] = 'too_large'; continue; }
-            $vSize = aiworker_chat_products_size($v) + 1;
-            if ($variations && (count($variations) >= AIWORKER_CHAT_PRODUCTS_RECORDS - 1 || $parentSize + $varBytes + $vSize > $limit)) {
-                $r = $add(array_merge($parent, ['variations' => $variations])); if ($r !== '') return $r;
-                $variations = []; $varBytes = 0;
-            }
-            $variations[] = $v; $varBytes += $vSize;
-        }
-        $r = $add(array_merge($parent, ['variations' => $variations])); if ($r !== '') return $r;
-    }
+    foreach ($pieces as $piece) { $r = $add($piece); if ($r !== '') return $r; }
     return $flush();
 }
 
@@ -241,12 +258,19 @@ function aiworker_chat_products_send(array $records, array &$rejected, string $t
  * the run failed (the failure is recorded and retried; the queue is left as it was).
  */
 function aiworker_chat_products_step(array $kb, array $q, string $token): ?array {
-    if (! aiworker_chat_products_available()) return ['products' => [], 'preconcile' => 0, 'pclean' => 1];
-    if (! $q['products'] && ! $q['preconcile']) return ['products' => [], 'preconcile' => 0, 'pclean' => 1];
+    if (! aiworker_chat_products_available()) return ['products' => [], 'preconcile' => 0, 'pclean' => 1, 'product_force' => 0, 'product_force_ids' => []];
+    if (! $q['products'] && ! $q['preconcile']) return ['products' => [], 'preconcile' => 0, 'pclean' => 1, 'product_force' => 0, 'product_force_ids' => []];
     $batch = array_slice($q['products'], 0, AIWORKER_CHAT_PRODUCTS_BATCH);
     $records = []; $gone = [];
     $on = aiworker_chat_products_on($kb);
+    $hashes = aiworker_chat_kb_hashes();
+    $productMarkers = $on ? aiworker_chat_products_markers($batch) : [];
+    $forceAllProducts = ! empty($q['force']) || ! empty($q['product_force']);
+    $forceProductIds = array_fill_keys(array_map('strval', (array) ($q['product_force_ids'] ?? [])), true);
     foreach ($batch as $id) {
+        $idString = (string) $id;
+        if (! $forceAllProducts && empty($q['preconcile']) && ! isset($forceProductIds[$idString]) && ! empty($productMarkers[$idString]) && ! empty($hashes['products'][$idString])
+            && ($hashes['markers']['products'][$idString] ?? '') === $productMarkers[$idString]) continue;
         $record = $on ? aiworker_chat_products_record((int) $id, $kb) : null;
         if (! $record) { $gone[] = (string) $id; continue; }
         $records[] = $record;
@@ -259,15 +283,47 @@ function aiworker_chat_products_step(array $kb, array $q, string $token): ?array
         foreach ((array) ($r['variations'] ?? []) as $v) unset($rejected[$r['id'].'#'.$v['id']], $tooLarge[$r['id'].'#'.$v['id']]);
     }
     foreach ($gone as $id) foreach (array_keys($tooLarge) as $key) if (explode('#', $key)[0] === $id) unset($tooLarge[$key]);
-    $fresh = [];
-    if ($records) {
-        $res = aiworker_chat_products_send($records, $fresh, $token);
+    $preparedRejected = [];
+    $pieces = aiworker_chat_products_prepare($records, $preparedRejected);
+    $byProduct = [];
+    foreach ($pieces as $piece) $byProduct[(string) $piece['id']][] = $piece;
+    $productHashes = (array) $hashes['products'];
+    $expected = []; $sendIds = []; $verified = [];
+    foreach ($records as $record) {
+        $id = (string) $record['id'];
+        $productPieces = $byProduct[$id] ?? [];
+        $hasPrepareReject = aiworker_chat_products_has_rejection($id, $preparedRejected);
+        if ($productPieces && ! $hasPrepareReject) $expected[$id] = aiworker_chat_kb_hash_value($productPieces);
+        if (! $forceAllProducts && ! isset($forceProductIds[$id]) && isset($expected[$id]) && ($productHashes[$id] ?? '') === $expected[$id]) {
+            if (! empty($productMarkers[$id])) $verified[$id] = $productMarkers[$id];
+            continue;
+        }
+        $sendIds[$id] = true;
+    }
+    $sendPieces = array_values(array_filter($pieces, static function (array $piece) use ($sendIds): bool { return isset($sendIds[(string) $piece['id']]); }));
+    $fresh = $preparedRejected;
+    if ($sendPieces) {
+        foreach (array_keys($sendIds) as $id) unset($hashes['markers']['products'][$id]);
+        aiworker_chat_kb_hashes_save($hashes); // a forced event must not keep an old marker if a request fails
+        $res = aiworker_chat_products_send($sendPieces, $fresh, $token);
         if ($res !== '') { aiworker_chat_products_fail($res); return null; }
     }
+    foreach (array_keys($sendIds) as $id) {
+        unset($hashes['products'][$id]);
+        if (isset($expected[$id]) && ! aiworker_chat_products_has_rejection($id, $fresh)) {
+            $hashes['products'][$id] = $expected[$id];
+            if (! empty($productMarkers[$id])) $verified[$id] = $productMarkers[$id];
+        } else unset($hashes['markers']['products'][$id]);
+    }
+    foreach ($verified as $id => $marker) if (! empty($hashes['products'][$id])) $hashes['markers']['products'][$id] = $marker;
+    aiworker_chat_kb_hashes_save($hashes);
     [$fresh, $tooLarge] = aiworker_chat_products_split_rejected($fresh, $tooLarge);
-    if ($gone) {
+    $deleted = 0;
+    if ($gone && empty($q['preconcile'])) {
         [$res] = aiworker_chat_products_post('products/delete', ['ids' => $gone], $token);
         if ($res !== '') { aiworker_chat_products_fail($res); return null; }
+        aiworker_chat_products_hashes_drop($gone);
+        $deleted = count($gone);
     }
     $rest = array_slice($q['products'], count($batch));
     $clean = $q['pclean'] && ! $fresh;
@@ -280,18 +336,32 @@ function aiworker_chat_products_step(array $kb, array $q, string $token): ?array
             $all = aiworker_chat_products_all_ids($kb);
             [$res] = aiworker_chat_products_post('products/reconcile', ['ids' => array_map('strval', $all)], $token);
             if ($res !== '') { aiworker_chat_products_fail($res); return null; }
+            if (! aiworker_chat_kb_lock_touch($token)) return null;
+            $hashes = aiworker_chat_kb_hashes();
+            $exported = array_fill_keys(array_map('strval', $all), true);
+            foreach (array_keys((array) $hashes['products']) as $id) if (! isset($exported[(string) $id])) {
+                unset($hashes['products'][$id], $hashes['markers']['products'][$id]);
+                $deleted++;
+            }
+            foreach (array_keys((array) $hashes['markers']['products']) as $id) if (! isset($exported[(string) $id])) unset($hashes['markers']['products'][$id]);
+            aiworker_chat_kb_hashes_save($hashes);
             $exported = array_fill_keys(array_map('strval', $all), true);
             foreach (array_keys($tooLarge) as $key) if (! isset($exported[explode('#', (string) $key)[0]])) unset($tooLarge[$key]);
             $note = '';
+            $state['product_reconcile_at'] = time();
         } else {
             $note = __('Products that are no longer on the site were not removed from kra.name this time, because some products were not accepted.', 'needtome-ai-chat');
         }
         $reconcile = 0; $clean = true;
     }
-    aiworker_chat_kb_state(['p_sent' => (int) ($state['p_sent'] ?? 0) + count($records), 'p_deleted' => (int) ($state['p_deleted'] ?? 0) + count($gone),
+    aiworker_chat_kb_state(['p_sent' => (int) ($state['p_sent'] ?? 0) + count($sendIds), 'p_deleted' => (int) ($state['p_deleted'] ?? 0) + $deleted,
+        'product_reconcile_at' => (int) ($state['product_reconcile_at'] ?? 0),
         'p_rejected' => array_slice(array_replace($rejected, $fresh), -50, null, true), 'p_too_large' => array_map('strval', array_keys($tooLarge)), 'p_note' => $note]);
-    delete_transient('aiworker_chat_products_status');
-    return ['products' => $rest, 'preconcile' => $reconcile, 'pclean' => $clean ? 1 : 0];
+    delete_transient(aiworker_chat_option_name('aiworker_chat_products_status'));
+    $forceIdsRest = array_values(array_intersect((array) ($q['product_force_ids'] ?? []), $rest));
+    $forceAllRest = $rest || $reconcile ? (int) ! empty($q['product_force']) : 0;
+    return ['products' => $rest, 'preconcile' => $reconcile, 'pclean' => $clean ? 1 : 0,
+        'product_force' => $forceAllRest, 'product_force_ids' => $forceIdsRest];
 }
 
 /**
@@ -305,6 +375,17 @@ function aiworker_chat_products_split_rejected(array $fresh, array $tooLarge): a
     return [$fresh, $tooLarge];
 }
 
+function aiworker_chat_products_has_rejection(string $id, array $rejected): bool {
+    foreach ($rejected as $key => $reason) if ((string) $key === $id || strpos((string) $key, $id.'#') === 0) return true;
+    return false;
+}
+
+function aiworker_chat_products_hashes_drop(array $ids): void {
+    $hashes = aiworker_chat_kb_hashes();
+    foreach ($ids as $id) unset($hashes['products'][(string) $id], $hashes['markers']['products'][(string) $id]);
+    aiworker_chat_kb_hashes_save($hashes);
+}
+
 /** Records a failed catalog request and schedules a retry (none for a bad token). */
 function aiworker_chat_products_fail(string $result): void {
     if ($result === 'too_large') $result = 'error:HTTP 413';   // a delete or reconcile list over the server's limit
@@ -313,20 +394,21 @@ function aiworker_chat_products_fail(string $result): void {
 }
 
 /** Queue product IDs (a variation queues its product) for sending or removing; $reconcile marks a full pass. */
-function aiworker_chat_products_enqueue(array $ids, bool $reconcile = false): void {
+function aiworker_chat_products_enqueue(array $ids, bool $reconcile = false, bool $force = false, bool $changedOnly = false): void {
     $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
     if (! $ids && ! $reconcile) return;
-    add_option(AIWORKER_CHAT_KB_INBOX.str_replace('-', '', wp_generate_uuid4()), ['ids' => [], 'reconcile' => 0, 'products' => $ids, 'preconcile' => $reconcile ? 1 : 0], '', false);
-    if (! wp_next_scheduled('aiworker_chat_kb_sync')) wp_schedule_single_event(time() + 30, 'aiworker_chat_kb_sync');
+    add_option(aiworker_chat_option_name(AIWORKER_CHAT_KB_INBOX).str_replace('-', '', wp_generate_uuid4()), ['ids' => [], 'reconcile' => 0,
+        'product_force' => $force && ! $changedOnly ? 1 : 0, 'product_force_ids' => $force && $changedOnly ? $ids : [], 'products' => $ids, 'preconcile' => $reconcile ? 1 : 0], '', false);
+    if (! wp_next_scheduled('aiworker_chat_kb_sync', [aiworker_chat_current_id()])) wp_schedule_single_event(time() + 30, 'aiworker_chat_kb_sync', [aiworker_chat_current_id()]);
 }
 
 /** The catalog's state at kra.name for this site, cached for five minutes. */
 function aiworker_chat_products_remote_status(): ?array {
-    $cached = get_transient('aiworker_chat_products_status');
+    $cached = get_transient(aiworker_chat_option_name('aiworker_chat_products_status'));
     if (is_array($cached)) return $cached;
     [$code, $data] = aiworker_chat_kb_request('GET', 'products/status?site='.rawurlencode(home_url('/')));
     $status = $code === 200 && is_array($data) ? $data : ['ok' => false, 'code' => $code];
-    set_transient('aiworker_chat_products_status', $status, 5 * MINUTE_IN_SECONDS);
+    set_transient(aiworker_chat_option_name('aiworker_chat_products_status'), $status, 5 * MINUTE_IN_SECONDS);
     return $status;
 }
 
@@ -348,23 +430,23 @@ function aiworker_chat_products_status_text(array $kb, array $state, int $queued
 // Product changes, including stock and price changes made by orders and imports (no save_post then).
 add_action('init', static function (): void {
     if (! aiworker_chat_products_available()) return;
-    $product = static function ($id): void { if (aiworker_chat_products_on()) aiworker_chat_products_enqueue([(int) $id]); };
+    $product = static function ($id): void { aiworker_chat_each(static function () use ($id): void { if (aiworker_chat_products_on()) aiworker_chat_products_enqueue([(int) $id], false, true, true); }); };
     $byObject = static function ($p) use ($product): void { if ($p instanceof WC_Product) $product($p->is_type('variation') ? $p->get_parent_id() : $p->get_id()); };
     $variation = static function ($id) use ($product): void { $parent = wp_get_post_parent_id((int) $id); if ($parent) $product($parent); };
     foreach (['woocommerce_new_product', 'woocommerce_update_product'] as $hook) add_action($hook, $product);
-    foreach (['woocommerce_new_product_variation', 'woocommerce_update_product_variation', 'woocommerce_before_delete_product_variation'] as $hook) add_action($hook, $variation);
+    foreach (['woocommerce_new_product_variation', 'woocommerce_update_product_variation'] as $hook) add_action($hook, $variation);
     foreach (['woocommerce_product_set_stock', 'woocommerce_variation_set_stock'] as $hook) add_action($hook, $byObject);
     foreach (['woocommerce_product_set_stock_status', 'woocommerce_variation_set_stock_status'] as $hook) add_action($hook, static function ($id) use ($product, $variation): void {
         get_post_type((int) $id) === 'product_variation' ? $variation($id) : $product($id);
     });
 });
-foreach (['trashed_post', 'untrashed_post', 'before_delete_post'] as $aiworker_chat_product_action) {
-    add_action($aiworker_chat_product_action, static function (int $postId): void {
+foreach (['untrashed_post', 'before_delete_post'] as $aiworker_chat_product_action) {
+    aiworker_chat_on_each($aiworker_chat_product_action, static function (int $postId) use ($aiworker_chat_product_action): void {
         $type = get_post_type($postId);
-        if ($type === 'product' && aiworker_chat_products_on()) aiworker_chat_products_enqueue([$postId]);
-        elseif ($type === 'product_variation' && aiworker_chat_products_on() && ($parent = wp_get_post_parent_id($postId))) aiworker_chat_products_enqueue([$parent]);
+        if ($type === 'product' && $aiworker_chat_product_action === 'untrashed_post' && aiworker_chat_products_on()) aiworker_chat_products_enqueue([$postId], false, true, true);
+        elseif ($type === 'product_variation' && aiworker_chat_products_on() && ($parent = wp_get_post_parent_id($postId))) aiworker_chat_products_enqueue([$parent], false, true, true);
     });
 }
-add_action('save_post_product', static function (int $postId): void {
-    if (! wp_is_post_revision($postId) && ! wp_is_post_autosave($postId) && aiworker_chat_products_on()) aiworker_chat_products_enqueue([$postId]);
+aiworker_chat_on_each('save_post_product', static function (int $postId): void {
+    if (! wp_is_post_revision($postId) && ! wp_is_post_autosave($postId) && aiworker_chat_products_on()) aiworker_chat_products_enqueue([$postId], false, true, true);
 }, 20);

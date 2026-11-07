@@ -2,13 +2,14 @@
 /**
  * Knowledge base from this site: the owner picks post types and, for each, the fields (title, content, excerpt,
  * taxonomies, post meta, ACF). Matching published posts are sent to the chat's knowledge base at kra.name, where they
- * are chunked and vectorized. Changes are queued on save/trash/delete and sent by WP-Cron; a daily reconcile removes
- * documents that no longer match. Contract: docs/wordpress-kb-sync-contract.md in the kra.name repository.
+ * are chunked and vectorized. Changes are queued on save/trash/delete and sent by WP-Cron; the daily pass compares
+ * hashes, while a full reconcile removes documents that no longer match at most weekly. Contract: docs/wordpress-kb-sync-contract.md in the kra.name repository.
  */
 
 if (! defined('ABSPATH')) exit;
 
 const AIWORKER_CHAT_KB_OPTION = 'aiworker_chat_kb';
+const AIWORKER_CHAT_KB_HASHES = 'aiworker_chat_kb_hashes';
 /** Where the client manages the chat's own knowledge sources at kra.name. */
 const AIWORKER_CHAT_KB_PANEL_URL = 'https://kra.name/app/panel/chat';
 const AIWORKER_CHAT_KB_QUEUE = 'aiworker_chat_kb_queue';
@@ -25,9 +26,181 @@ function aiworker_chat_kb_defaults(): array {
 }
 
 function aiworker_chat_kb_options(): array {
-    $o = wp_parse_args((array) get_option(AIWORKER_CHAT_KB_OPTION, []), aiworker_chat_kb_defaults());
+    $o = wp_parse_args(aiworker_chat_read_options(AIWORKER_CHAT_KB_OPTION), aiworker_chat_kb_defaults());
     $o['types'] = is_array($o['types']) ? $o['types'] : [];
     return $o;
+}
+
+/** Content fingerprints belong to the chat and stay out of autoloaded options. */
+function aiworker_chat_kb_hashes(): array {
+    $raw = (array) get_option(aiworker_chat_option_name(AIWORKER_CHAT_KB_HASHES), []);
+    $hashes = wp_parse_args($raw, ['fingerprint' => '', 'documents' => [], 'products' => [], 'markers' => []]);
+    $documents = (array) $hashes['documents'];
+    $migrated = false;
+    $firstKey = $documents ? array_key_first($documents) : null;
+    if ($firstKey !== null && ! is_array($documents[$firstKey])) {
+        $grouped = [];
+        foreach ($documents as $key => $hash) {
+            $key = (string) $key;
+            $root = explode('#', $key, 2)[0];
+            $grouped[$root][$key] = $hash;
+        }
+        $hashes['documents'] = $grouped;
+        $migrated = true;
+    }
+    $hashes['markers'] = wp_parse_args((array) $hashes['markers'], ['documents' => [], 'products' => []]);
+    $hashes['markers']['documents'] = (array) $hashes['markers']['documents'];
+    $hashes['markers']['products'] = (array) $hashes['markers']['products'];
+    if (! isset($raw['markers']) || $migrated) aiworker_chat_kb_hashes_save($hashes); // legacy flat hashes migrate without a resend
+    return $hashes;
+}
+
+function aiworker_chat_kb_hashes_save(array $hashes): void {
+    update_option(aiworker_chat_option_name(AIWORKER_CHAT_KB_HASHES), $hashes, false);
+}
+
+/** A short SHA-256 of the JSON value sent inside the existing API request. */
+function aiworker_chat_kb_hash_value(array $value): string {
+    return substr(hash('sha256', (string) wp_json_encode($value)), 0, 24);
+}
+
+function aiworker_chat_kb_export_fingerprint(?array $kb = null): string {
+    $kb = $kb ?? aiworker_chat_kb_options();
+    $export = [];
+    foreach (['enabled', 'types', 'products', 'all_langs', 'widgets', 'acf_options'] as $key) $export[$key] = $kb[$key] ?? null;
+    $languages = aiworker_chat_site_languages(); ksort($languages);
+    return aiworker_chat_kb_hash_value(['plugin' => AIWORKER_CHAT_VERSION, 'home' => home_url('/'), 'options' => $export,
+        'languages' => $languages, 'default_language' => aiworker_chat_kb_default_lang()]);
+}
+
+function aiworker_chat_kb_hashes_reset(?array $kb = null): void {
+    aiworker_chat_kb_hashes_save(['fingerprint' => aiworker_chat_kb_export_fingerprint($kb), 'documents' => [], 'products' => [], 'markers' => ['documents' => [], 'products' => []]]);
+}
+
+/** A changed export contract invalidates every previously accepted content hash once. */
+function aiworker_chat_kb_hashes_prepare(?array $kb = null): bool {
+    $fingerprint = aiworker_chat_kb_export_fingerprint($kb);
+    $hashes = aiworker_chat_kb_hashes();
+    if ($hashes['fingerprint'] === $fingerprint) return false;
+    aiworker_chat_kb_hashes_save(['fingerprint' => $fingerprint, 'documents' => [], 'products' => [], 'markers' => ['documents' => [], 'products' => []]]);
+    return true;
+}
+
+function aiworker_chat_kb_doc_hash_id(array $doc): string {
+    return (string) $doc['id'].(isset($doc['part']) ? '#'.(int) $doc['part'] : '');
+}
+
+/** Keeps a document's parts together: a count or content change sends every current part. */
+function aiworker_chat_kb_docs_unchanged(array $docs, bool $force, ?array $stored = null): bool {
+    if ($force || ! $docs) return false;
+    $stored = $stored ?? aiworker_chat_kb_hashes()['documents'];
+    $root = (string) $docs[0]['id'];
+    $keys = (array) ($stored[$root] ?? []);
+    if (count($keys) !== count($docs)) return false;
+    foreach ($docs as $doc) {
+        $key = aiworker_chat_kb_doc_hash_id($doc);
+        if (! isset($keys[$key]) || $keys[$key] !== aiworker_chat_kb_hash_value($doc)) return false;
+    }
+    return true;
+}
+
+function aiworker_chat_kb_hashes_drop_documents(array $ids): void {
+    $hashes = aiworker_chat_kb_hashes();
+    foreach ($ids as $id) {
+        $root = (string) $id;
+        unset($hashes['documents'][$root], $hashes['markers']['documents'][$root]);
+    }
+    aiworker_chat_kb_hashes_save($hashes);
+}
+
+function aiworker_chat_kb_hashes_prune_documents(array $ids): void {
+    $keep = array_fill_keys(array_map('strval', $ids), true);
+    $hashes = aiworker_chat_kb_hashes();
+    foreach (array_keys((array) $hashes['documents']) as $root) if (! isset($keep[(string) $root])) unset($hashes['documents'][$root]);
+    foreach (array_keys((array) $hashes['markers']['documents']) as $root) if (! isset($keep[(string) $root])) unset($hashes['markers']['documents'][$root]);
+    aiworker_chat_kb_hashes_save($hashes);
+}
+
+/** Accepted-content markers are written only after the matching wire hashes are present. */
+function aiworker_chat_kb_hashes_mark(string $kind, array $markers): void {
+    if (! in_array($kind, ['documents', 'products'], true)) return;
+    $hashes = aiworker_chat_kb_hashes();
+    foreach ($markers as $id => $marker) {
+        $hasHash = $kind === 'documents' ? ! empty($hashes['documents'][(string) $id]) : ! empty($hashes['products'][(string) $id]);
+        if ($hasHash && $marker !== '') $hashes['markers'][$kind][(string) $id] = (string) $marker;
+    }
+    aiworker_chat_kb_hashes_save($hashes);
+}
+
+function aiworker_chat_kb_rejected_root(string $root, array $rejected): bool {
+    foreach ($rejected as $id => $reason) if ((string) $id === $root || strpos((string) $id, $root.'#') === 0) return true;
+    return false;
+}
+
+/** Index a small set of post rows without loading post content into a daily marker pass. */
+function aiworker_chat_kb_marker_rows(array $ids, bool $productChildren = false): array {
+    global $wpdb;
+    $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+    if (! $ids) return [];
+    $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+    // This projection is the cheap marker input; content/meta are fetched only after a mismatch. The list holds one %d per ID.
+    // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare -- WP_Query would load post content; the worker batch is bounded.
+    $rows = $productChildren
+        ? $wpdb->get_results($wpdb->prepare("SELECT ID, post_type, post_parent, post_status, post_password, post_modified_gmt FROM {$wpdb->posts} WHERE ID IN ({$placeholders}) OR (post_type = %s AND post_parent IN ({$placeholders}))", ...array_merge($ids, ['product_variation'], $ids)))
+        : $wpdb->get_results($wpdb->prepare("SELECT ID, post_type, post_parent, post_status, post_password, post_modified_gmt FROM {$wpdb->posts} WHERE ID IN ({$placeholders})", ...$ids));
+    // phpcs:enable
+    $out = [];
+    foreach ((array) $rows as $row) $out[(int) $row->ID] = $row;
+    return $out;
+}
+
+/** A cheap marker for accepted posts, including the published translation links in a single-language export. */
+function aiworker_chat_kb_document_markers(array $ids, array $kb): array {
+    $rows = aiworker_chat_kb_marker_rows($ids);
+    if (! $rows) return [];
+    $translationIds = [];
+    $translationGroups = [];
+    if (empty($kb['all_langs']) && aiworker_chat_kb_default_lang() !== null) {
+        foreach ($ids as $id) {
+            $row = $rows[(int) $id] ?? null;
+            if (! $row || ! in_array((string) $row->post_type, array_keys((array) $kb['types']), true)) continue;
+            $group = aiworker_chat_kb_translation_ids_for((int) $id, (string) $row->post_type);
+            $translationGroups[(int) $id] = $group;
+            foreach ($group as $translatedId) $translationIds[] = (int) $translatedId;
+        }
+        $translationIds = array_values(array_diff(array_unique($translationIds), array_map('intval', $ids)));
+        if ($translationIds) $rows += aiworker_chat_kb_marker_rows($translationIds);
+    }
+    $markers = [];
+    foreach ($ids as $id) {
+        $id = (int) $id; $row = $rows[$id] ?? null;
+        if (! $row) continue;
+        $translations = [];
+        foreach ((array) ($translationGroups[$id] ?? []) as $language => $translatedId) {
+            $translatedId = (int) $translatedId;
+            if ($translatedId === $id) continue;
+            $translated = $rows[$translatedId] ?? null;
+            if (! $translated || $translated->post_status !== 'publish' || $translated->post_password !== '') continue;
+            $translations[(string) $language] = [$translatedId, (string) $translated->post_modified_gmt];
+            if (count($translations) >= 10) break;
+        }
+        $markers['post:'.$id] = aiworker_chat_kb_hash_value(['type' => (string) $row->post_type, 'status' => (string) $row->post_status,
+            'password' => (string) $row->post_password, 'modified_gmt' => (string) $row->post_modified_gmt,
+            'language' => aiworker_chat_kb_post_lang($id), 'translations' => $translations]);
+    }
+    return $markers;
+}
+
+function aiworker_chat_kb_translation_ids_for(int $postId, string $postType): array {
+    if (function_exists('pll_get_post_translations')) return array_map('intval', (array) pll_get_post_translations($postId));
+    $ids = [];
+    // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WPML owns these documented integration hooks.
+    foreach ((array) apply_filters('wpml_active_languages', null, ['skip_missing' => 0]) as $code => $lang) {
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+        $translatedId = (int) apply_filters('wpml_object_id', $postId, $postType, false, (string) $code);
+        if ($translatedId) $ids[(string) $code] = $translatedId;
+    }
+    return $ids;
 }
 
 /** Public post types that can be sent (attachments and builder internals are left out). */
@@ -118,7 +291,7 @@ function aiworker_chat_kb_sanitize($input): array {
 }
 
 add_action('admin_init', static function (): void {
-    register_setting('aiworker_chat_kb', AIWORKER_CHAT_KB_OPTION, ['type' => 'array', 'sanitize_callback' => 'aiworker_chat_kb_sanitize', 'default' => aiworker_chat_kb_defaults()]);
+    register_setting('aiworker_chat_kb', aiworker_chat_option_name(AIWORKER_CHAT_KB_OPTION), ['type' => 'array', 'sanitize_callback' => 'aiworker_chat_kb_sanitize', 'default' => aiworker_chat_kb_defaults()]);
 });
 
 /** A scalar, list or ACF value as one line of text. */
@@ -155,15 +328,7 @@ function aiworker_chat_kb_default_lang(): ?string {
 
 /** The post's translations in the other languages: language => post id (itself included). */
 function aiworker_chat_kb_translation_ids(WP_Post $post): array {
-    if (function_exists('pll_get_post_translations')) return array_map('intval', (array) pll_get_post_translations($post->ID));
-    $ids = [];
-    // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WPML owns these documented integration hooks.
-    foreach ((array) apply_filters('wpml_active_languages', null, ['skip_missing' => 0]) as $code => $lang) {
-        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
-        $id = (int) apply_filters('wpml_object_id', $post->ID, $post->post_type, false, (string) $code);
-        if ($id) $ids[(string) $code] = $id;
-    }
-    return $ids;
+    return aiworker_chat_kb_translation_ids_for((int) $post->ID, (string) $post->post_type);
 }
 
 /**
@@ -269,7 +434,7 @@ function aiworker_chat_kb_document(WP_Post $post, ?array $kb = null): ?array {
     }
     foreach ((array) $cfg['meta'] as $key) {
         if (aiworker_chat_kb_secret_name((string) $key)) continue;
-        $v = aiworker_chat_kb_text(maybe_unserialize(get_post_meta($post->ID, $key, true)));
+        $v = aiworker_chat_kb_text(get_post_meta($post->ID, $key, true));
         if ($v !== '') $fieldLines[] = $key.': '.$v;
     }
     if ($cfg['acf'] && function_exists('get_field')) {
@@ -386,6 +551,8 @@ function aiworker_chat_kb_can_sync(?array $kb = null): bool {
 function aiworker_chat_kb_request(string $method, string $path, ?array $body = null, int $timeout = 30): array {
     $o = aiworker_chat_options();
     $kb = aiworker_chat_kb_options();
+    if ($method === 'GET') $path = add_query_arg('chat_id', aiworker_chat_linked_id(), $path);
+    else $body = array_merge($body ?? [], ['chat_id' => aiworker_chat_linked_id()]);
     if (! aiworker_chat_valid_key((string) $o['key'])) return [0, null, __('The chat key is missing.', 'needtome-ai-chat')];
     // a saved sync token (wks_…) as before; otherwise the AI Worker sign-in, whose token kra.name accepts for its account's chats
     $legacy = (string) $kb['token'];
@@ -411,9 +578,14 @@ function aiworker_chat_kb_request(string $method, string $path, ?array $body = n
 }
 
 function aiworker_chat_kb_state(array $patch = []): array {
-    $state = wp_parse_args((array) get_option(AIWORKER_CHAT_KB_STATE, []), ['last_sync' => 0, 'last_error' => '', 'sent' => 0, 'deleted' => 0, 'site_ids' => []]);
-    if ($patch) { $state = array_merge($state, $patch); update_option(AIWORKER_CHAT_KB_STATE, $state, false); }
+    $state = wp_parse_args((array) get_option(aiworker_chat_option_name(AIWORKER_CHAT_KB_STATE), []), ['last_sync' => 0, 'last_error' => '', 'sent' => 0, 'deleted' => 0, 'site_ids' => [], 'skipped' => 0, 'doc_reconcile_at' => 0, 'product_reconcile_at' => 0]);
+    if ($patch) { $state = array_merge($state, $patch); update_option(aiworker_chat_option_name(AIWORKER_CHAT_KB_STATE), $state, false); }
     return $state;
+}
+
+function aiworker_chat_kb_reconcile_due(string $kind, ?int $now = null): bool {
+    $field = $kind === 'products' ? 'product_reconcile_at' : 'doc_reconcile_at';
+    return ($now ?? time()) - (int) (aiworker_chat_kb_state()[$field] ?? 0) >= 7 * DAY_IN_SECONDS;
 }
 
 /**
@@ -426,29 +598,35 @@ const AIWORKER_CHAT_KB_INBOX = 'aiworker_chat_kb_in_';
 const AIWORKER_CHAT_KB_RUNNING = 'aiworker_chat_kb_running';
 
 function aiworker_chat_kb_queue_read(): array {
-    wp_cache_delete(AIWORKER_CHAT_KB_QUEUE, 'options');
-    $q = (array) get_option(AIWORKER_CHAT_KB_QUEUE, []);
+    wp_cache_delete(aiworker_chat_option_name(AIWORKER_CHAT_KB_QUEUE), 'options');
+    $q = (array) get_option(aiworker_chat_option_name(AIWORKER_CHAT_KB_QUEUE), []);
     $ids = (array) ($q['ids'] ?? []);
     if ($ids && array_keys($ids) !== range(0, count($ids) - 1)) $ids = array_keys($ids);   // older id => seq format
-    return ['ids' => array_values(array_unique(array_map('intval', $ids))), 'reconcile' => (int) ! empty($q['reconcile']),
-        'products' => array_values(array_unique(array_map('intval', (array) ($q['products'] ?? [])))), 'preconcile' => (int) ! empty($q['preconcile']), 'pclean' => (int) ($q['pclean'] ?? 1), 'site' => (int) ! empty($q['site'])];
+    return ['ids' => array_values(array_unique(array_map('intval', $ids))), 'force_ids' => array_values(array_unique(array_map('intval', (array) ($q['force_ids'] ?? [])))),
+        'reconcile' => (int) ! empty($q['reconcile']),
+        'products' => array_values(array_unique(array_map('intval', (array) ($q['products'] ?? [])))), 'preconcile' => (int) ! empty($q['preconcile']), 'pclean' => (int) ($q['pclean'] ?? 1),
+        'product_force' => (int) ! empty($q['product_force']), 'product_force_ids' => array_values(array_unique(array_map('intval', (array) ($q['product_force_ids'] ?? [])))),
+        'site' => (int) ! empty($q['site']), 'force' => (int) ! empty($q['force']), 'reset_hashes' => (int) ! empty($q['reset_hashes']),
+        'reconcile_gone' => array_values(array_unique(array_map('strval', (array) ($q['reconcile_gone'] ?? []))))];
 }
 
 /** Inbox entries waiting for the worker: option name => ['ids' => [...], 'reconcile' => 0|1]. */
 function aiworker_chat_kb_inbox(): array {
     global $wpdb;
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Options API cannot fetch all inbox rows by this prefix; each row is claimed and deleted only after merging.
-    $rows = $wpdb->get_results($wpdb->prepare("SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s ORDER BY option_id", $wpdb->esc_like(AIWORKER_CHAT_KB_INBOX).'%'));
+    $rows = $wpdb->get_results($wpdb->prepare("SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s ORDER BY option_id", $wpdb->esc_like(aiworker_chat_option_name(AIWORKER_CHAT_KB_INBOX)).'%'));
     $out = [];
     foreach ((array) $rows as $row) $out[$row->option_name] = (array) maybe_unserialize($row->option_value);
     return $out;
 }
 
 /** Queue post IDs for sending (or deleting) and wake the cron worker shortly. */
-function aiworker_chat_kb_enqueue(array $ids, bool $reconcile = false): void {
-    $entry = ['ids' => array_values(array_unique(array_map('intval', $ids))), 'reconcile' => $reconcile ? 1 : 0];
-    if ($entry['ids'] || $entry['reconcile']) add_option(AIWORKER_CHAT_KB_INBOX.str_replace('-', '', wp_generate_uuid4()), $entry, '', false);
-    if (! wp_next_scheduled('aiworker_chat_kb_sync')) wp_schedule_single_event(time() + 30, 'aiworker_chat_kb_sync');
+function aiworker_chat_kb_enqueue(array $ids, bool $reconcile = false, bool $force = false, bool $site = false, bool $resetHashes = false, bool $changedOnly = false): void {
+    $ids = array_values(array_unique(array_map('intval', $ids)));
+    $entry = ['ids' => $ids, 'force_ids' => $force && $changedOnly ? $ids : [], 'reconcile' => $reconcile ? 1 : 0, 'force' => $force && ! $changedOnly ? 1 : 0,
+        'site' => $site ? 1 : 0, 'reset_hashes' => $resetHashes ? 1 : 0];
+    if ($entry['ids'] || $entry['reconcile'] || $entry['site']) add_option(aiworker_chat_option_name(AIWORKER_CHAT_KB_INBOX).str_replace('-', '', wp_generate_uuid4()), $entry, '', false);
+    if (! wp_next_scheduled('aiworker_chat_kb_sync', [aiworker_chat_current_id()])) wp_schedule_single_event(time() + 30, 'aiworker_chat_kb_sync', [aiworker_chat_current_id()]);
 }
 
 /** Worker only: moves inbox entries into the main queue (each entry is deleted only after it is merged). */
@@ -458,15 +636,22 @@ function aiworker_chat_kb_take_inbox(): array {
     if (! $inbox) return $q;
     foreach ($inbox as $entry) {
         $q['ids'] = array_merge($q['ids'], array_map('intval', (array) ($entry['ids'] ?? [])));
+        $q['force_ids'] = array_merge($q['force_ids'], array_map('intval', (array) ($entry['force_ids'] ?? [])));
         if (! empty($entry['reconcile'])) $q['reconcile'] = 1;
         if (! empty($entry['site'])) $q['site'] = 1;
+        if (! empty($entry['force'])) $q['force'] = 1;
+        if (! empty($entry['product_force'])) $q['product_force'] = 1;
+        $q['product_force_ids'] = array_merge($q['product_force_ids'], array_map('intval', (array) ($entry['product_force_ids'] ?? [])));
+        if (! empty($entry['reset_hashes'])) $q['reset_hashes'] = 1;
         $q['products'] = array_merge($q['products'], array_map('intval', (array) ($entry['products'] ?? [])));
         // a new full pass of the catalog starts clean: a rejection in it holds back its reconcile
         if (! empty($entry['preconcile'])) { $q['preconcile'] = 1; $q['pclean'] = 1; }
     }
     $q['ids'] = array_values(array_unique($q['ids']));
+    $q['force_ids'] = array_values(array_unique($q['force_ids']));
     $q['products'] = array_values(array_unique($q['products']));
-    update_option(AIWORKER_CHAT_KB_QUEUE, $q, false);
+    $q['product_force_ids'] = array_values(array_unique($q['product_force_ids']));
+    update_option(aiworker_chat_option_name(AIWORKER_CHAT_KB_QUEUE), $q, false);
     foreach (array_keys($inbox) as $name) delete_option($name);
     return $q;
 }
@@ -475,16 +660,16 @@ function aiworker_chat_kb_take_inbox(): array {
 function aiworker_chat_kb_lock_take(): string {
     global $wpdb;
     $token = wp_generate_uuid4();
-    if (aiworker_chat_option_insert(AIWORKER_CHAT_KB_RUNNING, ['token' => $token, 'at' => time()])) return $token;
+    if (aiworker_chat_option_insert(aiworker_chat_option_name(AIWORKER_CHAT_KB_RUNNING), ['token' => $token, 'at' => time()])) return $token;
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- The lock needs a fresh atomic read to distinguish a live worker from a stale lock.
-    $raw = $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", AIWORKER_CHAT_KB_RUNNING));
+    $raw = $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", aiworker_chat_option_name(AIWORKER_CHAT_KB_RUNNING)));
     $held = (array) maybe_unserialize((string) $raw);
     if (time() - (int) ($held['at'] ?? 0) < 5 * MINUTE_IN_SECONDS) return '';
     // a stale lock (a worker that died): remove exactly that row, then compete for the lock like a new worker
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Conditional delete makes stale-lock recovery atomic and removes only the value just read.
-    $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", AIWORKER_CHAT_KB_RUNNING, (string) $raw));
-    wp_cache_delete(AIWORKER_CHAT_KB_RUNNING, 'options');
-    return aiworker_chat_option_insert(AIWORKER_CHAT_KB_RUNNING, ['token' => $token, 'at' => time()]) ? $token : '';
+    $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", aiworker_chat_option_name(AIWORKER_CHAT_KB_RUNNING), (string) $raw));
+    wp_cache_delete(aiworker_chat_option_name(AIWORKER_CHAT_KB_RUNNING), 'options');
+    return aiworker_chat_option_insert(aiworker_chat_option_name(AIWORKER_CHAT_KB_RUNNING), ['token' => $token, 'at' => time()]) ? $token : '';
 }
 
 /**
@@ -496,11 +681,11 @@ function aiworker_chat_kb_lock_touch(string $token): bool {
     if ($token === '') return true;   // tests and direct calls without a worker lock
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Conditional update is the worker-lock heartbeat; the options API cannot compare-and-set this lock safely.
     $updated = $wpdb->query($wpdb->prepare("UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value LIKE %s",
-        maybe_serialize(['token' => $token, 'at' => time()]), AIWORKER_CHAT_KB_RUNNING, '%'.$wpdb->esc_like($token).'%'));
-    wp_cache_delete(AIWORKER_CHAT_KB_RUNNING, 'options');
+        maybe_serialize(['token' => $token, 'at' => time()]), aiworker_chat_option_name(AIWORKER_CHAT_KB_RUNNING), '%'.$wpdb->esc_like($token).'%'));
+    wp_cache_delete(aiworker_chat_option_name(AIWORKER_CHAT_KB_RUNNING), 'options');
     if ($updated) return true;
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Fresh lock read after a failed heartbeat verifies whether the same worker still owns it.
-    $raw = (string) $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", AIWORKER_CHAT_KB_RUNNING));
+    $raw = (string) $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", aiworker_chat_option_name(AIWORKER_CHAT_KB_RUNNING)));
     return strpos($raw, $token) !== false;   // same second: nothing changed, still ours
 }
 
@@ -508,8 +693,8 @@ function aiworker_chat_kb_lock_touch(string $token): bool {
 function aiworker_chat_kb_lock_release(string $token): void {
     global $wpdb;
     // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Conditional delete releases only this worker's token and cannot be expressed as an atomic options API call.
-    $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value LIKE %s", AIWORKER_CHAT_KB_RUNNING, '%'.$wpdb->esc_like($token).'%'));
-    wp_cache_delete(AIWORKER_CHAT_KB_RUNNING, 'options');
+    $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value LIKE %s", aiworker_chat_option_name(AIWORKER_CHAT_KB_RUNNING), '%'.$wpdb->esc_like($token).'%'));
+    wp_cache_delete(aiworker_chat_option_name(AIWORKER_CHAT_KB_RUNNING), 'options');
 }
 
 /**
@@ -517,48 +702,90 @@ function aiworker_chat_kb_lock_release(string $token): void {
  * code: 'auth' (bad token: stop until it is replaced), 'retry:<seconds>' (throttled) or 'error' (back off).
  */
 function aiworker_chat_kb_send_docs(array $docs, array &$rejected, string $token = ''): string {
-    $batch = []; $bytes = 0;
-    $flush = static function () use (&$batch, &$bytes, &$rejected, $token): string {
+    $batch = []; $bytes = 0; $cleared = [];
+    $flush = static function () use (&$batch, &$bytes, &$rejected, &$cleared, $token): string {
         if (! $batch) return '';
         if (! aiworker_chat_kb_lock_touch($token)) return 'lost';
         [$code, $data, $err] = aiworker_chat_kb_request('POST', 'documents', ['site' => home_url('/'), 'docs' => $batch]);
-        $batch = []; $bytes = 0;
         if ($code === 401) return 'auth';
         if ($code === 429) return 'retry:'.max(30, (int) ($data['retry_after'] ?? 60));
         if ($err !== '') return 'error';
         foreach ((array) ($data['results'] ?? []) as $r) if (($r['status'] ?? '') === 'rejected') $rejected[(string) ($r['id'] ?? '')] = (string) ($r['reason'] ?? '');
+        $hashes = aiworker_chat_kb_hashes();
+        $map = (array) $hashes['documents'];
+        foreach ($batch as $doc) {
+            $root = (string) $doc['id']; $key = aiworker_chat_kb_doc_hash_id($doc);
+            if (! isset($cleared[$root])) {
+                unset($map[$root]);
+                $cleared[$root] = true;
+            }
+            if (isset($rejected[$key]) || isset($rejected[$root])) continue;
+            $map[$root][$key] = aiworker_chat_kb_hash_value($doc);
+        }
+        $hashes['documents'] = $map;
+        aiworker_chat_kb_hashes_save($hashes);
+        $batch = []; $bytes = 0;
         return '';
     };
     foreach ($docs as $doc) {
         // last guard: a part over the character limit is never sent (the splitter should not produce one)
-        if (aiworker_chat_kb_chars((string) $doc['content']) > AIWORKER_CHAT_KB_PART_CHARS) { $rejected[$doc['id'].(isset($doc['part']) ? '#'.$doc['part'] : '')] = 'too_long'; continue; }
+        if (aiworker_chat_kb_chars((string) $doc['content']) > AIWORKER_CHAT_KB_PART_CHARS) {
+            $key = aiworker_chat_kb_doc_hash_id($doc); $rejected[$key] = 'too_long';
+            aiworker_chat_kb_hashes_drop_documents([(string) $doc['id']]);
+            continue;
+        }
         $size = strlen((string) wp_json_encode($doc));
         if ($batch && (count($batch) >= AIWORKER_CHAT_KB_REQUEST_DOCS || $bytes + $size > AIWORKER_CHAT_KB_REQUEST_BYTES)) { $r = $flush(); if ($r !== '') return $r; }
         $batch[] = $doc; $bytes += $size;
     }
-    return $flush();
+    $r = $flush();
+    if ($r !== '') return $r;
+    $drop = [];
+    foreach ($docs as $doc) {
+        $root = (string) $doc['id'];
+        if (aiworker_chat_kb_rejected_root($root, $rejected)) $drop[] = $root;
+    }
+    if ($drop) aiworker_chat_kb_hashes_drop_documents(array_values(array_unique($drop)));
+    return '';
 }
 
-/** Records a failed run and schedules the next attempt (none for a bad token: the owner must enter a new one). */
-function aiworker_chat_kb_fail(string $result, string $message): void {
+/** Records a failed run and schedules retryable failures on the requested worker hook. */
+function aiworker_chat_kb_fail(string $result, string $message, string $hook = 'aiworker_chat_kb_sync'): void {
     if ($result === 'lost') return;   // another worker owns the queue now and continues
-    if ($result === 'auth') { aiworker_chat_kb_state(['last_error' => __('kra.name rejected the sync token: create a new one on the chat\'s card and save it here.', 'needtome-ai-chat')]); return; }
+    if ($result === 'auth') {
+        $kb = aiworker_chat_kb_options();
+        $message = ! empty($kb['token'])
+            ? __('kra.name rejected the previously saved sync token. Remove it on this page, then sign in to AI Worker again if needed.', 'needtome-ai-chat')
+            : __('AI Worker authorization was rejected. Sign in to AI Worker again to resume syncing.', 'needtome-ai-chat');
+        aiworker_chat_kb_state(['last_error' => $message]);
+        return;
+    }
+    if ($result === 'permanent') { aiworker_chat_kb_state(['last_error' => $message !== '' ? $message : __('kra.name rejected this removal request. Review the sync settings before trying again.', 'needtome-ai-chat')]); return; }
     $delay = strpos($result, 'retry:') === 0 ? (int) substr($result, 6) : 15 * MINUTE_IN_SECONDS;
     aiworker_chat_kb_state(['last_error' => $message !== '' ? $message : __('kra.name is not reachable; the sync will be retried.', 'needtome-ai-chat')]);
-    wp_schedule_single_event(time() + $delay, 'aiworker_chat_kb_sync');
+    wp_schedule_single_event(time() + $delay, $hook, [aiworker_chat_current_id()]);
 }
 
 /** Cron worker: sends one batch of posts, then reschedules itself while there is work left. */
-function aiworker_chat_kb_process(): void {
+function aiworker_chat_kb_process(string $id = 'chat1'): void {
+    if (! in_array($id, aiworker_chat_ids(), true)) return;
+    aiworker_chat_with($id, 'aiworker_chat_kb_process_current');
+}
+
+function aiworker_chat_kb_process_current(): void {
     $kb = aiworker_chat_kb_options();
     if (! $kb['enabled']) return;
     $token = aiworker_chat_kb_lock_take();
     if ($token === '') {
         // another worker is running: try again later; the inbox keeps everything queued meanwhile
-        if (! wp_next_scheduled('aiworker_chat_kb_sync')) wp_schedule_single_event(time() + MINUTE_IN_SECONDS, 'aiworker_chat_kb_sync');
+        if (! wp_next_scheduled('aiworker_chat_kb_sync', [aiworker_chat_current_id()])) wp_schedule_single_event(time() + MINUTE_IN_SECONDS, 'aiworker_chat_kb_sync', [aiworker_chat_current_id()]);
         return;
     }
     try {
+        if (aiworker_chat_kb_hashes_prepare($kb)) {
+            aiworker_chat_kb_enqueue(aiworker_chat_kb_all_ids($kb), false, false, true);
+            if (aiworker_chat_products_on($kb)) aiworker_chat_products_enqueue(aiworker_chat_products_all_ids($kb));
+        }
         aiworker_chat_kb_run_batch($kb, $token);
     } finally {
         aiworker_chat_kb_lock_release($token);
@@ -568,53 +795,105 @@ function aiworker_chat_kb_process(): void {
 function aiworker_chat_kb_run_batch(array $kb, string $token = ''): void {
     if (! aiworker_chat_kb_lock_touch($token)) return;
     $q = aiworker_chat_kb_take_inbox();
+    if (! empty($q['reset_hashes'])) aiworker_chat_kb_hashes_reset($kb);
     $batch = array_slice($q['ids'], 0, AIWORKER_CHAT_KB_BATCH);
-    $docs = []; $gone = []; $posts = 0; $cut = [];
+    $docs = []; $currentDocs = []; $gone = []; $posts = 0; $skipped = 0; $cut = []; $verifiedMarkers = []; $sendMarkers = [];
+    $hashes = aiworker_chat_kb_hashes();
+    $storedHashes = (array) $hashes['documents'];
+    $markers = aiworker_chat_kb_document_markers($batch, $kb);
+    // a reconcile rebuilds every page from source, but only «Sync now» and settings changes resend what did not change
+    $rebuild = ! empty($q['force']) || ! empty($q['reconcile']) || ! empty($q['reset_hashes']);
+    $resend = ! empty($q['force']);
     foreach ($batch as $id) {
+        $root = 'post:'.(int) $id;
+        $build = $rebuild || in_array((int) $id, (array) ($q['force_ids'] ?? []), true);
+        if (! $build && ! empty($markers[$root]) && ! empty($storedHashes[$root])
+            && ($hashes['markers']['documents'][$root] ?? '') === $markers[$root]) { $skipped++; continue; }
         $post = get_post((int) $id);
         $doc = $post ? aiworker_chat_kb_document($post, $kb) : null;
         if (! $doc) { $gone[] = 'post:'.(int) $id; continue; }
-        $docs = array_merge($docs, aiworker_chat_kb_parts($doc, $truncated)); $posts++;
+        $parts = aiworker_chat_kb_parts($doc, $truncated);
+        $currentDocs = array_merge($currentDocs, $parts);
+        if (aiworker_chat_kb_docs_unchanged($parts, $resend, $storedHashes)) {
+            if (! empty($markers[$root])) $verifiedMarkers[$root] = $markers[$root];
+            $skipped++; continue;
+        }
+        $docs = array_merge($docs, $parts); $posts++;
+        if (! empty($markers[$root])) $sendMarkers[$root] = $markers[$root];
         if ($truncated) $cut[] = $doc['id'];
     }
     $rejected = (array) (aiworker_chat_kb_state()['rejected'] ?? []);
-    foreach ($docs as $d) unset($rejected[$d['id'].(isset($d['part']) ? '#'.$d['part'] : '')], $rejected[$d['id']]);
+    $currentRoots = array_values(array_unique(array_column($currentDocs, 'id')));
+    // published pages that no longer build a document (e.g. only the title stays selected) leave with the reconcile,
+    // so the pass remembers them across batches; hashes may be reset by now, so this is taken before the filter below
+    $reconcileGone = $q['reconcile'] ? array_values(array_diff(array_unique(array_merge($q['reconcile_gone'], $gone)), $currentRoots)) : [];
+    foreach ($currentRoots as $root) foreach (array_keys($rejected) as $rejectedId) {
+        if ((string) $rejectedId === (string) $root || strpos((string) $rejectedId, (string) $root.'#') === 0) unset($rejected[$rejectedId]);
+    }
     // a post longer than the parts limit is sent without its tail: the status lists such posts on their own
     $shortened = array_values(array_unique(array_merge(array_diff((array) (aiworker_chat_kb_state()['truncated'] ?? []), array_column($docs, 'id'), $gone), $cut)));
     $before = $rejected;
-    if ($docs) { $r = aiworker_chat_kb_send_docs($docs, $rejected, $token); if ($r !== '') { aiworker_chat_kb_fail($r, ''); return; } }
-    if ($gone) {
+    if ($docs) {
+        $hashes = aiworker_chat_kb_hashes();
+        foreach (array_keys($sendMarkers) as $root) unset($hashes['markers']['documents'][$root]);
+        aiworker_chat_kb_hashes_save($hashes); // a forced send must not keep a marker if a request fails
+        $r = aiworker_chat_kb_send_docs($docs, $rejected, $token);
+        if ($r !== '') { aiworker_chat_kb_fail($r, ''); return; }
+        foreach ($sendMarkers as $root => $marker) if (! aiworker_chat_kb_rejected_root($root, $rejected)) $verifiedMarkers[$root] = $marker;
+        aiworker_chat_kb_hashes_mark('documents', $verifiedMarkers);
+    } elseif ($verifiedMarkers) aiworker_chat_kb_hashes_mark('documents', $verifiedMarkers);
+    $deleted = 0;
+    // a page that was never accepted (too short, another language) has nothing to delete at kra.name
+    if (! $resend) $gone = array_values(array_filter($gone, static function ($root) use ($storedHashes) { return ! empty($storedHashes[$root]); }));
+    if ($gone && empty($q['reconcile'])) {
         if (! aiworker_chat_kb_lock_touch($token)) return;
         [$code, , $err] = aiworker_chat_kb_request('POST', 'documents/delete', ['site' => home_url('/'), 'ids' => $gone]);
         if ($err !== '') { aiworker_chat_kb_fail($code === 401 ? 'auth' : ($code === 429 ? 'retry:60' : 'error'), $err); return; }
+        aiworker_chat_kb_hashes_drop_documents($gone);
+        $deleted = count($gone);
     }
     $rest = array_slice($q['ids'], count($batch));
     // widgets and options pages go once the posts are through, on their own change or on a full pass
     $siteIds = null;
     if (! $rest && ($q['site'] || $q['reconcile'])) {
         if (! aiworker_chat_kb_lock_touch($token)) return;
-        $siteIds = aiworker_chat_kb_site_step($kb, $rejected, $token);
+        $siteIds = aiworker_chat_kb_site_step($kb, $rejected, $token, $resend, ! empty($q['reconcile']));
         if ($siteIds === null) return;
         $posts += count($siteIds);
     }
-    $reconciled = false;
+    $reconciled = false; $blockedByRejection = false;
     if (! $rest && $q['reconcile']) {
-        if (! aiworker_chat_kb_lock_touch($token)) return;
-        $all = array_merge(array_map(static function ($id) { return 'post:'.$id; }, aiworker_chat_kb_all_ids($kb)), (array) $siteIds);
-        [$code, , $err] = aiworker_chat_kb_request('POST', 'documents/reconcile', ['site' => home_url('/'), 'ids' => $all]);
-        if ($err !== '') { aiworker_chat_kb_fail($code === 401 ? 'auth' : ($code === 429 ? 'retry:60' : 'error'), $err); return; }
-        $reconciled = true;
-        // a reconcile removes what is no longer selected, so a deselected post is no longer «sent without its end»
-        $shortened = array_values(array_intersect($shortened, $all));
+        $pages = array_map(static function ($id) { return 'post:'.$id; }, aiworker_chat_kb_all_ids($kb));
+        $all = array_merge(array_values(array_diff($pages, $reconcileGone)), (array) $siteIds);
+        $currentIds = array_fill_keys(array_map('strval', $all), true);
+        foreach (array_keys($rejected) as $rejectedId) {
+            $root = explode('#', (string) $rejectedId, 2)[0];
+            if (isset($currentIds[$root])) { $blockedByRejection = true; break; }
+        }
+        if (! $blockedByRejection) {
+            if (! aiworker_chat_kb_lock_touch($token)) return;
+            [$code, , $err] = aiworker_chat_kb_request('POST', 'documents/reconcile', ['site' => home_url('/'), 'ids' => $all]);
+            if ($err !== '') { aiworker_chat_kb_fail($code === 401 ? 'auth' : ($code === 429 ? 'retry:60' : 'error'), $err); return; }
+            if (! aiworker_chat_kb_lock_touch($token)) return;
+            $oldHashes = aiworker_chat_kb_hashes();
+            $removed = count(array_diff(array_keys((array) $oldHashes['documents']), array_map('strval', $all)));
+            aiworker_chat_kb_hashes_prune_documents($all);
+            if ($siteIds !== null) aiworker_chat_kb_state(['site_ids' => $siteIds]);
+            $reconciled = true;
+            aiworker_chat_kb_state(['doc_reconcile_at' => time()]);
+            $deleted += $removed;
+            // a reconcile removes what is no longer selected, so a deselected post is no longer «sent without its end»
+            $shortened = array_values(array_intersect($shortened, $all));
+        }
     }
     // only this worker writes the main queue (checked again: a lost lock means another worker owns it now);
     // anything enqueued meanwhile is still in the inbox
     if (! aiworker_chat_kb_lock_touch($token)) return;
     $catalog = aiworker_chat_products_step($kb, $q, $token);
     $catalogFailed = $catalog === null;   // recorded and rescheduled by the step; the products stay queued
-    if ($catalogFailed) $catalog = ['products' => $q['products'], 'preconcile' => $q['preconcile'], 'pclean' => $q['pclean']];
+    if ($catalogFailed) $catalog = ['products' => $q['products'], 'preconcile' => $q['preconcile'], 'pclean' => $q['pclean'],
+        'product_force' => $q['product_force'], 'product_force_ids' => $q['product_force_ids']];
     if (! aiworker_chat_kb_lock_touch($token)) return;
-    update_option(AIWORKER_CHAT_KB_QUEUE, ['ids' => $rest, 'reconcile' => $reconciled ? 0 : $q['reconcile'], 'site' => $siteIds === null ? $q['site'] : 0] + $catalog, false);
     // «missing_part»: a later part arrived without its part 1 on the server; send the whole post again next run,
     // unless part 1 itself was rejected (e.g. over a limit), which a resend would not fix.
     $resend = [];
@@ -623,65 +902,119 @@ function aiworker_chat_kb_run_batch(array $kb, string $token = ''): void {
         if (! isset($rejected['post:'.$m[1].'#1'])) $resend[(int) $m[1]] = true;
     }
     if ($resend) aiworker_chat_kb_enqueue(array_keys($resend));
+    $pending = $rest || ($q['reconcile'] && ! $reconciled) || $resend || $catalogFailed || $catalog['products'] || $catalog['preconcile'];
+    $forceIdsRest = array_values(array_intersect((array) $q['force_ids'], $rest));
+    update_option(aiworker_chat_option_name(AIWORKER_CHAT_KB_QUEUE), ['ids' => $rest, 'force_ids' => $forceIdsRest,
+        'reconcile' => $reconciled ? 0 : $q['reconcile'], 'site' => $siteIds === null ? $q['site'] : 0,
+        'force' => $pending ? $q['force'] : 0, 'reconcile_gone' => $reconciled ? [] : $reconcileGone] + $catalog, false);
     $state = aiworker_chat_kb_state();
-    aiworker_chat_kb_state(['last_sync' => time(), 'last_error' => $catalogFailed ? $state['last_error'] : '', 'sent' => (int) $state['sent'] + $posts, 'deleted' => (int) $state['deleted'] + count($gone), 'rejected' => array_slice($rejected, -50, null, true), 'truncated' => array_slice($shortened, -50)]);
-    delete_transient('aiworker_chat_kb_status');
-    if ($rest || ($q['reconcile'] && ! $reconciled) || $resend || (! $catalogFailed && ($catalog['products'] || $catalog['preconcile'])) || aiworker_chat_kb_inbox()) wp_schedule_single_event(time() + 5, 'aiworker_chat_kb_sync');
+    $patch = ['last_sync' => time(), 'last_error' => $catalogFailed ? $state['last_error'] : '', 'sent' => (int) $state['sent'] + $posts,
+        'deleted' => (int) $state['deleted'] + $deleted, 'skipped' => $skipped, 'rejected' => array_slice($rejected, -50, null, true), 'truncated' => array_slice($shortened, -50)];
+    if ($reconciled) $patch['doc_reconcile_at'] = time();
+    aiworker_chat_kb_state($patch);
+    delete_transient(aiworker_chat_option_name('aiworker_chat_kb_status'));
+    if ($rest || ($q['reconcile'] && ! $reconciled && ! $blockedByRejection) || $resend || (! $catalogFailed && ($catalog['products'] || $catalog['preconcile'])) || aiworker_chat_kb_inbox()) wp_schedule_single_event(time() + 5, 'aiworker_chat_kb_sync', [aiworker_chat_current_id()]);
 }
 
 /** The source's state at kra.name (documents, characters, vectors), cached for five minutes. */
 function aiworker_chat_kb_remote_status(): ?array {
-    $cached = get_transient('aiworker_chat_kb_status');
+    $cached = get_transient(aiworker_chat_option_name('aiworker_chat_kb_status'));
     if (is_array($cached)) return $cached;
     [$code, $data] = aiworker_chat_kb_request('GET', 'status?site='.rawurlencode(home_url('/')));
     $status = $code === 200 && is_array($data) ? $data : ['ok' => false, 'code' => $code];
-    set_transient('aiworker_chat_kb_status', $status, 5 * MINUTE_IN_SECONDS);
+    set_transient(aiworker_chat_option_name('aiworker_chat_kb_status'), $status, 5 * MINUTE_IN_SECONDS);
     return $status;
 }
 
 add_action('aiworker_chat_kb_sync', 'aiworker_chat_kb_process');
 
-/** Daily full check: every selected post again plus removal of documents the site no longer exports. */
-add_action('aiworker_chat_kb_daily', static function (): void {
+/** Daily check compares hashes and reconciles removals at most weekly. */
+function aiworker_chat_kb_daily_current(): void {
     $kb = aiworker_chat_kb_options();
-    if ($kb['enabled']) aiworker_chat_kb_enqueue(aiworker_chat_kb_all_ids($kb), true);
-    if (aiworker_chat_products_on($kb)) aiworker_chat_products_enqueue(aiworker_chat_products_all_ids($kb), true);
-});
+    if (empty($kb['enabled'])) return;
+    $hashes = aiworker_chat_kb_hashes();
+    $reset = $hashes['fingerprint'] !== aiworker_chat_kb_export_fingerprint($kb);
+    if (! $reset && ! empty($hashes['documents'])) {
+        $remote = aiworker_chat_kb_remote_status();
+        // The existing status card reads the source's document count from `docs`.
+        if ($remote && ! empty($remote['ok']) && isset($remote['docs']) && (int) $remote['docs'] === 0) $reset = true;
+    }
+    $docReconcile = aiworker_chat_kb_reconcile_due('documents');
+    $productReconcile = aiworker_chat_kb_reconcile_due('products');
+    aiworker_chat_kb_enqueue(aiworker_chat_kb_all_ids($kb), $docReconcile, false, true, $reset);
+    if (aiworker_chat_products_on($kb)) aiworker_chat_products_enqueue(aiworker_chat_products_all_ids($kb), $productReconcile);
+}
+aiworker_chat_on_each('aiworker_chat_kb_daily', 'aiworker_chat_kb_daily_current');
 add_action('init', static function (): void {
-    if (aiworker_chat_kb_options()['enabled'] && ! wp_next_scheduled('aiworker_chat_kb_daily')) wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'aiworker_chat_kb_daily');
+    aiworker_chat_each(static function (): void {
+        if (aiworker_chat_kb_options()['enabled'] && ! wp_next_scheduled('aiworker_chat_kb_daily')) wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'aiworker_chat_kb_daily');
+    });
 });
 
+/** Selected public custom fields can change without updating post_modified_gmt, so enqueue their owning record directly. */
+function aiworker_chat_kb_meta_changed($metaId, $postId, $metaKey, $metaValue = null): void {
+    $postId = absint($postId);
+    $metaKey = is_string($metaKey) ? $metaKey : '';
+    if ($postId < 1 || $metaKey === '' || aiworker_chat_kb_secret_name($metaKey) || wp_is_post_revision($postId) || wp_is_post_autosave($postId)) return;
+    $post = get_post($postId);
+    if (! $post) return;
+    aiworker_chat_each(static function () use ($post, $postId, $metaKey): void {
+        $kb = aiworker_chat_kb_options();
+        $cfg = $kb['types'][$post->post_type] ?? null;
+        if (empty($kb['enabled']) || ! is_array($cfg) || ! in_array($metaKey, (array) ($cfg['meta'] ?? []), true)) return;
+        if ($post->post_type === 'product' && aiworker_chat_products_on($kb)) {
+            aiworker_chat_products_enqueue([$postId], false, true, true);
+            return;
+        }
+        $ids = [$postId];
+        if (empty($kb['all_langs']) && ($default = aiworker_chat_kb_default_lang()) !== null) $ids[] = (int) (aiworker_chat_kb_translation_ids($post)[$default] ?? 0);
+        aiworker_chat_kb_enqueue(array_values(array_filter(array_unique($ids))), false, true, false, false, true);
+    });
+}
+foreach (['added_post_meta', 'updated_post_meta', 'deleted_post_meta'] as $aiworker_chat_meta_hook) {
+    add_action($aiworker_chat_meta_hook, 'aiworker_chat_kb_meta_changed', 20, 4);
+}
+
 // Content changes: a post that stops matching is queued too, so its document is removed.
-add_action('save_post', static function (int $postId, WP_Post $post): void {
+aiworker_chat_on_each('save_post', static function (int $postId, WP_Post $post): void {
     if (wp_is_post_revision($postId) || wp_is_post_autosave($postId)) return;
     $kb = aiworker_chat_kb_options();
     if (! $kb['enabled'] || ! isset($kb['types'][$post->post_type])) return;
     $ids = [$postId];
     // a translation changed: its original lists the translations' addresses, so it is sent again too
     if (empty($kb['all_langs']) && ($default = aiworker_chat_kb_default_lang()) !== null) $ids[] = (int) (aiworker_chat_kb_translation_ids($post)[$default] ?? 0);
-    aiworker_chat_kb_enqueue(array_values(array_filter(array_unique($ids))));
+    aiworker_chat_kb_enqueue(array_values(array_filter(array_unique($ids))), false, true, false, false, true);
 }, 20, 2);
-foreach (['trashed_post', 'deleted_post'] as $aiworker_chat_post_action) {
-    add_action($aiworker_chat_post_action, static function (int $postId): void { if (aiworker_chat_kb_options()['enabled']) aiworker_chat_kb_enqueue([$postId]); });
-}
 // A new selection of types or fields: send everything again and drop what is no longer selected.
 // (the very first save adds the option, later saves update it)
 // The catalog: switched on, everything is sent; switched off, a full pass with no products removes it at kra.name.
-add_action('update_option_'.AIWORKER_CHAT_KB_OPTION, static function ($old, $new): void {
-    if (! empty($new['enabled'])) aiworker_chat_kb_enqueue(aiworker_chat_kb_all_ids((array) $new), true);
-    if (! empty($new['enabled']) && (aiworker_chat_products_on((array) $new) || ! empty(((array) $old)['products']))) aiworker_chat_products_enqueue(aiworker_chat_products_all_ids((array) $new), true);
-}, 10, 2);
-add_action('add_option_'.AIWORKER_CHAT_KB_OPTION, static function ($option, $value): void {
-    if (! empty($value['enabled'])) aiworker_chat_kb_enqueue(aiworker_chat_kb_all_ids((array) $value), true);
-    if (aiworker_chat_products_on((array) $value)) aiworker_chat_products_enqueue(aiworker_chat_products_all_ids((array) $value), true);
-}, 10, 2);
+foreach (aiworker_chat_ids() as $aiworker_chat_id) {
+    add_action('update_option_'.aiworker_chat_option_name(AIWORKER_CHAT_KB_OPTION, $aiworker_chat_id), static function ($old, $new) use ($aiworker_chat_id): void {
+        aiworker_chat_with($aiworker_chat_id, static function () use ($old, $new): void {
+            if (! empty($new['enabled'])) {
+                aiworker_chat_kb_hashes_reset((array) $new);
+                aiworker_chat_kb_enqueue(aiworker_chat_kb_all_ids((array) $new), true, true, true);
+            }
+            if (! empty($new['enabled']) && (aiworker_chat_products_on((array) $new) || ! empty(((array) $old)['products']))) aiworker_chat_products_enqueue(aiworker_chat_products_all_ids((array) $new), true, true);
+            if ((string) (((array) $old)['token'] ?? '') !== (string) (((array) $new)['token'] ?? '') && function_exists('aiworker_chat_restore_removal_jobs')) {
+                aiworker_chat_restore_removal_jobs(aiworker_chat_current_id(), true);
+            }
+        });
+    }, 10, 2);
+}
 
-add_action('admin_post_aiwc_kb_sync', static function (): void {
+function aiworker_chat_kb_manual_sync(): void {
+    $kb = aiworker_chat_kb_options();
+    aiworker_chat_kb_hashes_reset($kb);
+    aiworker_chat_kb_enqueue(aiworker_chat_kb_all_ids($kb), true, true, true);
+    if (aiworker_chat_products_on($kb)) aiworker_chat_products_enqueue(aiworker_chat_products_all_ids($kb), true, true);
+}
+
+add_action('admin_post_aiworker_chat_kb_sync', static function (): void {
     if (! current_user_can('manage_options')) wp_die('', '', ['response' => 403]);
-    check_admin_referer('aiwc_kb_sync');
-    aiworker_chat_kb_enqueue(aiworker_chat_kb_all_ids(), true);
-    if (aiworker_chat_products_on()) aiworker_chat_products_enqueue(aiworker_chat_products_all_ids(), true);
-    wp_safe_redirect(Aiworker_Chat_Profile::url('aiworker-chat', ['tab' => 'kb', 'aiwc_kb' => 'queued']));
+    check_admin_referer('aiworker_chat_kb_sync');
+    aiworker_chat_kb_manual_sync();
+    wp_safe_redirect(Aiworker_Chat_Profile::url('aiworker-chat', ['tab' => 'kb', 'aiworker_chat_kb_notice' => 'queued', 'aiworker_chat_instance' => aiworker_chat_current_id()]));
     exit;
 });
 
@@ -689,19 +1022,19 @@ add_action('admin_post_aiwc_kb_sync', static function (): void {
 /** The «Knowledge base» tab: what the chat learns from kra.name, and the form that adds this site's own content. */
 function aiworker_chat_kb_tab(): void {
     ?>
-    <div class="aiwc-main aiwc-kb-tab">
-      <div class="aiwc-card aiwc-kb-intro">
-        <p class="aiwc-lead"><?php echo wp_kses(sprintf(
+    <div class="aiworker-chat-main aiworker-chat-kb-tab">
+      <div class="aiworker-chat-card aiworker-chat-kb-intro">
+        <p class="aiworker-chat-lead"><?php echo wp_kses(sprintf(
             /* translators: %s: link to the chat's knowledge sources at kra.name */
             __('The consultant\'s knowledge sources (pages of your site, files, Google Sheets and Docs, questions and answers) are set up in the chat\'s settings at %s, card «What the AI answers from». Here you can also send content straight from this site\'s database: it stays up to date by itself whenever you edit the site.', 'needtome-ai-chat'),
             '<a href="'.esc_url(AIWORKER_CHAT_KB_PANEL_URL).'" target="_blank" rel="noopener">kra.name</a>'), ['a' => ['href' => [], 'target' => [], 'rel' => []]]); ?></p>
         <p class="description"><?php esc_html_e('If you send this site\'s content from here, do not also add the same site as a «Site» source at kra.name (or leave out the sections sent from here): the knowledge base does not merge duplicates, so the same text would take space twice.', 'needtome-ai-chat'); ?></p>
       </div>
-      <?php if (function_exists('aiworker_chat_lazy') && (int) get_option(AIWORKER_CHAT_LINKED_OPTION, 0) > 0 && aiworker_chat_is_connected()) { aiworker_chat_lazy('answer', 0, true); aiworker_chat_lazy('sources', 0, true); } ?>
-      <form method="post" action="options.php" class="aiwc-main">
-        <?php settings_fields('aiworker_chat_kb'); ?>
+      <?php if (function_exists('aiworker_chat_lazy') && aiworker_chat_linked_id() > 0 && aiworker_chat_is_connected()) { aiworker_chat_lazy('answer', 0, true); aiworker_chat_lazy('sources', 0, true); } ?>
+      <form method="post" action="options.php" class="aiworker-chat-main">
+        <?php settings_fields('aiworker_chat_kb'); aiworker_chat_context_field(); ?>
         <?php aiworker_chat_kb_card(); ?>
-        <div class="aiwc-save"><?php submit_button(__('Save settings', 'needtome-ai-chat'), 'primary large', 'submit', false); ?></div>
+        <div class="aiworker-chat-save"><?php submit_button(__('Save settings', 'needtome-ai-chat'), 'primary large', 'submit', false); ?></div>
       </form>
     </div>
     <?php
@@ -709,46 +1042,46 @@ function aiworker_chat_kb_tab(): void {
 
 function aiworker_chat_kb_card(): void {
     $kb = aiworker_chat_kb_options();
-    $name = esc_attr(AIWORKER_CHAT_KB_OPTION);
+    $name = esc_attr(aiworker_chat_option_name(AIWORKER_CHAT_KB_OPTION));
     $types = aiworker_chat_kb_post_types();
     $state = aiworker_chat_kb_state();
     $coreLabels = ['title' => __('Title', 'needtome-ai-chat'), 'content' => __('Content', 'needtome-ai-chat'), 'excerpt' => __('Excerpt', 'needtome-ai-chat')];
     $box = static function (string $field, string $value, string $label, bool $on): string {
-        return '<label class="aiwc-check aiwc-kb__opt"><input type="checkbox" name="'.esc_attr($field).'[]" value="'.esc_attr($value).'" '.checked($on, true, false).'> '.esc_html($label).'</label>';
+        return '<label class="aiworker-chat-check aiworker-chat-kb__opt"><input type="checkbox" name="'.esc_attr($field).'[]" value="'.esc_attr($value).'" '.checked($on, true, false).'> '.esc_html($label).'</label>';
     };
     ?>
-    <section class="aiwc-card" id="aiwc-kb">
+    <section class="aiworker-chat-card" id="aiworker-chat-kb">
       <h2><?php esc_html_e('Content from this site', 'needtome-ai-chat'); ?></h2>
-      <p class="aiwc-lead"><?php esc_html_e('Choose the post types and fields the consultant should know. Published posts of these types are sent to the chat\'s knowledge base at kra.name and vectorized there; changes are sent automatically.', 'needtome-ai-chat'); ?></p>
-      <?php if (sanitize_key(wp_unslash($_GET['aiwc_kb'] ?? '')) === 'queued'): // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only picks the notice shown after the redirect; nothing is changed. ?><div class="notice notice-success inline"><p><?php esc_html_e('Full sync is queued; WordPress runs it in the background with its scheduled tasks (WP-Cron), usually within a minute while the site has visitors.', 'needtome-ai-chat'); ?></p></div><?php endif; ?>
+      <p class="aiworker-chat-lead"><?php esc_html_e('Choose the post types and fields the consultant should know. Published posts of these types are sent to the chat\'s knowledge base at kra.name and vectorized there; changes are sent automatically.', 'needtome-ai-chat'); ?></p>
+      <?php if (sanitize_key(wp_unslash($_GET['aiworker_chat_kb_notice'] ?? '')) === 'queued'): // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only picks the notice shown after the redirect; nothing is changed. ?><div class="notice notice-success inline"><p><?php esc_html_e('Full sync is queued; WordPress runs it in the background with its scheduled tasks (WP-Cron), usually within a minute while the site has visitors.', 'needtome-ai-chat'); ?></p></div><?php endif; ?>
       <?php
       $canSync = aiworker_chat_kb_can_sync($kb);
       if ($kb['token'] !== '') aiworker_chat_row(__('Sync token', 'needtome-ai-chat'),
-          '<p>'.esc_html__('A sync token from the kra.name panel is saved and used.', 'needtome-ai-chat').' <label class="aiwc-check"><input type="checkbox" name="'.$name.'[token_clear]" value="1"> '.esc_html__('Remove', 'needtome-ai-chat').'</label></p>',
+          '<p>'.esc_html__('A sync token from the kra.name panel is saved and used.', 'needtome-ai-chat').' <label class="aiworker-chat-check"><input type="checkbox" name="'.$name.'[token_clear]" value="1"> '.esc_html__('Remove', 'needtome-ai-chat').'</label></p>',
           esc_html__('Without it the content is sent through the AI Worker sign-in.', 'needtome-ai-chat'));
       elseif (! $canSync) aiworker_chat_row(__('AI Worker', 'needtome-ai-chat'),
           '<p>'.esc_html__('Sign in to AI Worker to send this site\'s content to the chat\'s knowledge base.', 'needtome-ai-chat').'</p>'
           .'<p>'.aiworker_chat_signin_link('kb', __('Sign in to AI Worker', 'needtome-ai-chat')).'</p>');
       aiworker_chat_row(__('Sync', 'needtome-ai-chat'),
-          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[enabled]" value="1" '.checked((bool) $kb['enabled'], true, false).disabled(! $canSync, true, false).'> '.esc_html__('Send the selected content to the chat\'s knowledge base', 'needtome-ai-chat').'</label>');
+          '<label class="aiworker-chat-check"><input type="checkbox" name="'.$name.'[enabled]" value="1" '.checked((bool) $kb['enabled'], true, false).disabled(! $canSync, true, false).'> '.esc_html__('Send the selected content to the chat\'s knowledge base', 'needtome-ai-chat').'</label>');
       $defaultLang = aiworker_chat_kb_default_lang();
       if ($defaultLang !== null) aiworker_chat_row(__('Languages', 'needtome-ai-chat'),
-          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[all_langs]" value="1" '.checked(! empty($kb['all_langs']), true, false).'> '.esc_html__('Translations differ in content — send every language', 'needtome-ai-chat').'</label>',
+          '<label class="aiworker-chat-check"><input type="checkbox" name="'.$name.'[all_langs]" value="1" '.checked(! empty($kb['all_langs']), true, false).'> '.esc_html__('Translations differ in content — send every language', 'needtome-ai-chat').'</label>',
           /* translators: %s: the site's default language code */
           esc_html(sprintf(__('Off: only the posts in the default language (%s) are sent, each with the addresses of its translations. The chat finds the answer whatever the visitor\'s language and links the page in that language.', 'needtome-ai-chat'), $defaultLang)));
       if (aiworker_chat_products_available()) aiworker_chat_row(__('Product catalog', 'needtome-ai-chat'),
-          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[products]" value="1" '.checked((bool) $kb['products'], true, false).'> '.esc_html__('Send the WooCommerce products to the chat\'s catalog', 'needtome-ai-chat').'</label>',
+          '<label class="aiworker-chat-check"><input type="checkbox" name="'.$name.'[products]" value="1" '.checked((bool) $kb['products'], true, false).'> '.esc_html__('Send the WooCommerce products to the chat\'s catalog', 'needtome-ai-chat').'</label>',
           esc_html__('Prices, sale prices, stock, categories, attributes and variations, so the consultant can pick products by exact characteristics. Products then do not go as separate documents: the «Products» row below chooses which descriptions and extra fields (taxonomies, ACF, custom fields) are added to each product.', 'needtome-ai-chat'));
       ?>
-      <div class="aiwc-kb__types">
+      <div class="aiworker-chat-kb__types">
         <?php foreach ($types as $type => $label):
             $cfg = $kb['types'][$type] ?? null; $on = (bool) $cfg; $field = $name.'[types]['.esc_attr($type).']';
             $count = (int) (wp_count_posts($type)->publish ?? 0);
             $tax = get_object_taxonomies($type, 'objects'); $acf = aiworker_chat_kb_acf_fields($type); $meta = aiworker_chat_kb_meta_keys($type); ?>
-          <details class="aiwc-kb__type"<?php echo $on ? ' open' : ''; ?>>
-            <summary><label class="aiwc-check"><input type="checkbox" name="<?php echo esc_attr($field); ?>[on]" value="1" <?php checked($on); ?>> <strong><?php echo esc_html($label); ?></strong></label>
+          <details class="aiworker-chat-kb__type"<?php echo $on ? ' open' : ''; ?>>
+            <summary><label class="aiworker-chat-check"><input type="checkbox" name="<?php echo esc_attr($field); ?>[on]" value="1" <?php checked($on); ?>> <strong><?php echo esc_html($label); ?></strong></label>
               <span class="description"><?php echo esc_html(sprintf(/* translators: %d: number of published posts */ _n('%d published', '%d published', $count, 'needtome-ai-chat'), $count)); ?></span></summary>
-            <div class="aiwc-kb__fields">
+            <div class="aiworker-chat-kb__fields">
               <div><b><?php esc_html_e('Fields', 'needtome-ai-chat'); ?></b>
                 <?php foreach ($coreLabels as $k => $l) echo wp_kses($box($field.'[fields]', $k, $l, $on ? in_array($k, (array) $cfg['fields'], true) : $k !== 'excerpt'), aiworker_chat_admin_html_allowed()); ?></div>
               <?php if ($tax): ?><div><b><?php esc_html_e('Taxonomies', 'needtome-ai-chat'); ?></b>
@@ -763,17 +1096,17 @@ function aiworker_chat_kb_card(): void {
       </div>
       <?php
       // shown on every site, so the owner knows these sources exist; what is found here now is named in the hint
-      echo '<h3 class="aiwc-kb__more">'.esc_html__('Other data of the site', 'needtome-ai-chat').'</h3>';
+      echo '<h3 class="aiworker-chat-kb__more">'.esc_html__('Other data of the site', 'needtome-ai-chat').'</h3>';
       $areas = array_column(aiworker_chat_kb_widget_areas($kb), 'name');
       aiworker_chat_row(__('Widgets', 'needtome-ai-chat'),
-          '<label class="aiwc-check"><input type="checkbox" name="'.$name.'[widgets]" value="1" '.checked(! empty($kb['widgets']), true, false).'> '.esc_html__('Send the text of the widgets (sidebars, footer)', 'needtome-ai-chat').'</label>',
+          '<label class="aiworker-chat-check"><input type="checkbox" name="'.$name.'[widgets]" value="1" '.checked(! empty($kb['widgets']), true, false).'> '.esc_html__('Send the text of the widgets (sidebars, footer)', 'needtome-ai-chat').'</label>',
           esc_html__('Text, Custom HTML and block widgets; each widget area is one document. Lists of posts, menus and very short texts are left out.', 'needtome-ai-chat').' '
           .($areas ? esc_html(sprintf(/* translators: %s: names of the widget areas */ __('Found now: %s.', 'needtome-ai-chat'), implode(', ', $areas)))
               : esc_html__('No widget with text on this site now: once you add one in Appearance → Widgets, it is sent.', 'needtome-ai-chat')));
       $acf = function_exists('acf_get_options_pages');
       $optionPages = aiworker_chat_kb_acf_option_pages();
       aiworker_chat_row(__('ACF options pages', 'needtome-ai-chat'),
-          '<label class="aiwc-check'.($acf ? '' : ' is-off').'"><input type="checkbox" name="'.$name.'[acf_options]" value="1" '.checked(! empty($kb['acf_options']), true, false).disabled(! $acf && empty($kb['acf_options']), true, false).'> '.esc_html__('Send the fields of the site settings pages', 'needtome-ai-chat').'</label>',
+          '<label class="aiworker-chat-check'.($acf ? '' : ' is-off').'"><input type="checkbox" name="'.$name.'[acf_options]" value="1" '.checked(! empty($kb['acf_options']), true, false).disabled(! $acf && empty($kb['acf_options']), true, false).'> '.esc_html__('Send the fields of the site settings pages', 'needtome-ai-chat').'</label>',
           esc_html__('Contacts, opening hours, delivery terms and other data set once for the whole site. Password, file and image fields are not sent.', 'needtome-ai-chat').' '
           .(! $acf ? esc_html__('Needs the Advanced Custom Fields plugin with options pages; it is not active on this site.', 'needtome-ai-chat')
               : ($optionPages ? esc_html(sprintf(/* translators: %s: names of the ACF options pages */ __('Found now: %s.', 'needtome-ai-chat'), implode(', ', array_column($optionPages, 'title'))))
@@ -789,6 +1122,7 @@ function aiworker_chat_kb_card(): void {
       $status = '';
       if ($kb['enabled']) {
           $status = $state['last_sync'] ? sprintf(/* translators: 1: date, 2: sent count, 3: removed count */ __('Last sync: %1$s. Sent: %2$d, removed: %3$d.', 'needtome-ai-chat'), wp_date(get_option('date_format').' '.get_option('time_format'), (int) $state['last_sync']), (int) $state['sent'], (int) $state['deleted']) : __('Not synced yet.', 'needtome-ai-chat');
+          if ($state['last_sync']) $status .= ' '.sprintf(/* translators: %d: unchanged pages skipped */ __('Unchanged pages skipped in the last run: %d', 'needtome-ai-chat'), (int) ($state['skipped'] ?? 0)).'.';
           if ($queued) $status .= ' '.sprintf(/* translators: %d: posts waiting */ _n('%d post is waiting to be sent.', '%d posts are waiting to be sent.', $queued, 'needtome-ai-chat'), $queued);
           if ($state['last_error'] !== '') $status .= ' '.sprintf(/* translators: %s: error */ __('Last error: %s', 'needtome-ai-chat'), $state['last_error']);
           $rejectedCount = count((array) ($state['rejected'] ?? []));
@@ -805,17 +1139,16 @@ function aiworker_chat_kb_card(): void {
           $catalogStatus = $canSync ? aiworker_chat_products_status_text($kb, $state, count(array_unique($waitingProducts))) : '';
           if ($catalogStatus !== '') $status .= ' '.$catalogStatus;
       }
-      $syncUrl = wp_nonce_url(admin_url('admin-post.php?action=aiwc_kb_sync'), 'aiwc_kb_sync');
+      $syncUrl = wp_nonce_url(add_query_arg('aiworker_chat_instance', aiworker_chat_current_id(), admin_url('admin-post.php?action=aiworker_chat_kb_sync')), 'aiworker_chat_kb_sync');
       aiworker_chat_row(__('Status', 'needtome-ai-chat'), '<p>'.esc_html($status ?: __('Sync is off.', 'needtome-ai-chat')).'</p>'
-          .'<p><button type="button" class="button aiwc-kb__preview-open">'.esc_html__('Preview what will be sent', 'needtome-ai-chat').'</button> '
+          .'<p><button type="button" class="button aiworker-chat-kb__preview-open">'.esc_html__('Preview what will be sent', 'needtome-ai-chat').'</button> '
           .($kb['enabled'] ? '<a class="button" href="'.esc_url($syncUrl).'">'.esc_html__('Sync everything now', 'needtome-ai-chat').'</a>' : '').'</p>');
       ?>
-      <dialog class="aiwc-modal" id="aiwc-kb-preview" aria-labelledby="aiwc-kb-preview-title">
-        <div class="aiwc-modal__head"><h2 id="aiwc-kb-preview-title"><?php esc_html_e('What will be sent to the knowledge base', 'needtome-ai-chat'); ?></h2>
-          <button type="button" class="aiwc-modal__close" aria-label="<?php esc_attr_e('Close', 'needtome-ai-chat'); ?>">&times;</button></div>
-        <div class="aiwc-modal__body" aria-live="polite"></div>
+      <dialog class="aiworker-chat-modal" id="aiworker-chat-kb-preview" aria-labelledby="aiworker-chat-kb-preview-title">
+        <div class="aiworker-chat-modal__head"><h2 id="aiworker-chat-kb-preview-title"><?php esc_html_e('What will be sent to the knowledge base', 'needtome-ai-chat'); ?></h2>
+          <button type="button" class="aiworker-chat-modal__close" aria-label="<?php esc_attr_e('Close', 'needtome-ai-chat'); ?>">&times;</button></div>
+        <div class="aiworker-chat-modal__body" aria-live="polite"></div>
       </dialog>
-      <?php aiworker_chat_kb_preview_script(); ?>
     </section>
     <?php
 }
@@ -823,56 +1156,28 @@ function aiworker_chat_kb_card(): void {
 /** AJAX: the preview for the choice in the form now, saved or not. */
 function aiworker_chat_kb_preview_ajax(): void {
     if (! current_user_can('manage_options')) wp_send_json_error(null, 403);
-    check_ajax_referer('aiwc_kb_preview', 'nonce');
+    check_ajax_referer('aiworker_chat_kb_preview', 'nonce');
     // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Checked field by field against the known types, fields and taxonomies.
-    $input = isset($_POST[AIWORKER_CHAT_KB_OPTION]) && is_array($_POST[AIWORKER_CHAT_KB_OPTION]) ? wp_unslash($_POST[AIWORKER_CHAT_KB_OPTION]) : [];
+    $input = isset($_POST[aiworker_chat_option_name(AIWORKER_CHAT_KB_OPTION)]) && is_array($_POST[aiworker_chat_option_name(AIWORKER_CHAT_KB_OPTION)]) ? wp_unslash($_POST[aiworker_chat_option_name(AIWORKER_CHAT_KB_OPTION)]) : [];
     unset($input['token_clear']);
     $kb = aiworker_chat_kb_sanitize($input);
-    ob_start();
-    aiworker_chat_kb_preview($kb);
-    wp_send_json_success(['html' => ob_get_clean()]);
+    wp_send_json_success(['html' => aiworker_chat_kb_preview($kb)]);
 }
-add_action('wp_ajax_aiwc_kb_preview', 'aiworker_chat_kb_preview_ajax');
-
-/** Opens the preview popup with the knowledge-base fields of the settings form. */
-function aiworker_chat_kb_preview_script(): void {
-    $data = ['ajax' => admin_url('admin-ajax.php'), 'nonce' => wp_create_nonce('aiwc_kb_preview'), 'field' => AIWORKER_CHAT_KB_OPTION.'[', 'loading' => __('Loading…', 'needtome-ai-chat'), 'failed' => __('The preview could not be loaded. Try again.', 'needtome-ai-chat')];
-    ?>
-    <?php ob_start(); ?>
-    (function () {
-      var c = <?php echo wp_json_encode($data); ?>, dlg = document.getElementById('aiwc-kb-preview'), body = dlg.querySelector('.aiwc-modal__body');
-      dlg.querySelector('.aiwc-modal__close').addEventListener('click', function () { dlg.close(); });
-      dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
-      document.querySelector('.aiwc-kb__preview-open').addEventListener('click', function () {
-        var form = this.closest('form'), data = new FormData();
-        data.append('action', 'aiwc_kb_preview'); data.append('nonce', c.nonce);
-        new FormData(form).forEach(function (v, k) { if (k.indexOf(c.field) === 0) data.append(k, v); });
-        body.textContent = c.loading; dlg.showModal();
-        // page (and lang, if the screen has one) make the answer use this screen's language, as the screen does
-        var q = new URLSearchParams(location.search), url = c.ajax + '?page=aiworker-chat' + (q.get('lang') ? '&lang=' + encodeURIComponent(q.get('lang')) : '');
-        fetch(url, {method: 'POST', body: data, credentials: 'same-origin'}).then(function (r) { return r.json(); }).then(function (r) {
-          if (! r || ! r.success) throw new Error();
-          body.innerHTML = r.data.html;
-        }).catch(function () { body.textContent = c.failed; });
-      });
-    })();
-    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
-    <?php
-}
+add_action('wp_ajax_aiworker_chat_kb_preview', 'aiworker_chat_kb_preview_ajax');
 
 /** Shows the first documents with the given settings, so the selection can be checked before saving and syncing; a long post goes in parts of this text. */
-function aiworker_chat_kb_preview(array $kb): void {
+function aiworker_chat_kb_preview(array $kb): string {
     $ids = aiworker_chat_kb_all_ids($kb);
-    echo '<div class="aiwc-kb__preview"><p><strong>'.esc_html(sprintf(/* translators: %d: number of posts */ _n('%d post matches the selection.', '%d posts match the selection.', count($ids), 'needtome-ai-chat'), count($ids))).'</strong> '
+    $html = '<div class="aiworker-chat-kb__preview"><p><strong>'.esc_html(sprintf(/* translators: %d: number of posts */ _n('%d post matches the selection.', '%d posts match the selection.', count($ids), 'needtome-ai-chat'), count($ids))).'</strong> '
         .esc_html__('The first three documents with the choice above, even before it is saved; a long post is sent in parts of this text:', 'needtome-ai-chat').'</p>';
-    foreach (aiworker_chat_kb_site_docs($kb) as $doc) echo '<details><summary>'.esc_html($doc['title']).'</summary><pre>'.esc_html(wp_json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)).'</pre></details>';
+    foreach (aiworker_chat_kb_site_docs($kb) as $doc) $html .= '<details><summary>'.esc_html($doc['title']).'</summary><pre>'.esc_html(wp_json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)).'</pre></details>';
     foreach (array_slice($ids, 0, 3) as $id) {
         $doc = aiworker_chat_kb_document(get_post($id), $kb);
         if (! $doc) continue;
         $parts = aiworker_chat_kb_parts($doc, $truncated);
         $note = $truncated ? '<p class="description">'.esc_html(sprintf(/* translators: %d: number of parts */ _n('This post is longer than the knowledge base takes: only its first %d part is sent.', 'This post is longer than the knowledge base takes: only its first %d parts are sent.', count($parts), 'needtome-ai-chat'), count($parts))).'</p>' : '';
         unset($parts);
-        echo '<details><summary>'.esc_html($doc['title'].' — '.$doc['url']).'</summary>'.$note.'<pre>'.esc_html(wp_json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)).'</pre></details>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $note is built from escaped text.
+        $html .= '<details><summary>'.esc_html($doc['title'].' — '.$doc['url']).'</summary>'.$note.'<pre>'.esc_html(wp_json_encode($doc, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)).'</pre></details>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $note is built from escaped text.
     }
-    echo '</div>';
+    return $html.'</div>';
 }

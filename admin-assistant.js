@@ -2,18 +2,18 @@
  * (includes/assistant.php); every text from kra.name is put into the page as text, links only from the «links» field. */
 (function () {
   'use strict';
-  var c = window.aiwcAssistant, root = document.getElementById('aiwc-wizard');
+  var c = window.aiworkerChatAssistant, root = document.getElementById('aiworker-chat-wizard');
   if (!c || !root) return;
   var t = c.t, $ = function (n) { return root.querySelector('[data-aw="' + n + '"]'); };
   var el = { account: $('account'), log: $('log'), pending: $('pending'), error: $('error'), text: $('text'),
-    send: $('send'), clear: $('clear'), period: $('period'), stats: $('stats') };
-  // the chat linked to this site by «Connect»; without one, the account's chats together
+    send: $('send'), clear: $('clear'), period: $('period'), range: $('range'), from: $('from'), to: $('to'), stats: $('stats') };
+  // The wizard and statistics use the chat linked to this site by «Connect».
   var busy = false, pollTimer = null, chatId = c.chatId && c.chatId !== '0' ? c.chatId : '';
   if (el.text) el.text.placeholder = t.placeholder;
 
   function call(op, extra) {
     var data = new FormData();
-    data.append('action', 'aiwc_assistant');
+    data.append('action', 'aiworker_chat_assistant');
     data.append('nonce', c.nonce);
     data.append('op', op);
     if (chatId) data.append('chat_id', chatId);
@@ -75,8 +75,8 @@
     messages.forEach(function (m, i) {
       var role = m && m.role === 'user' ? 'user' : 'assistant';
       var div = document.createElement('div');
-      div.className = 'aiwc-aw__msg aiwc-aw__msg--' + role;
-      if (body.watching && i === messages.length - 1 && /⏳/.test(m.text || '')) div.className += ' aiwc-aw__msg--working';
+      div.className = 'aiworker-chat-aw__msg aiworker-chat-aw__msg--' + role;
+      if (body.watching && i === messages.length - 1 && /⏳/.test(m.text || '')) div.className += ' aiworker-chat-aw__msg--working';
       var who = document.createElement('small');
       who.textContent = role === 'user' ? t.you : t.assistant;
       div.appendChild(who);
@@ -142,7 +142,7 @@
   function node(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
 
   function meter(label, used, limit, text, percent) {
-    var box = node('div', 'aiwc-aw__meter');
+    var box = node('div', 'aiworker-chat-aw__meter');
     var pct = percent != null ? Number(percent) : (limit > 0 ? used / limit * 100 : null);
     var line = node('div', '', label + ': ' + (text || (limit > 0 ? fmt(used) + ' ' + t.of + ' ' + fmt(limit) : fmt(used) + ' · ' + t.noLimit)));
     box.appendChild(line);
@@ -159,7 +159,7 @@
     var ns = 'http://www.w3.org/2000/svg', w = 600, h = 160, pad = 20, n = days.length;
     var max = Math.max(1, Math.max.apply(null, days.map(function (d) { return Math.max(d.sessions, d.leads); })));
     var svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.setAttribute('class', 'aiwc-aw__chart'); svg.setAttribute('role', 'img');
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h); svg.setAttribute('class', 'aiworker-chat-aw__chart'); svg.setAttribute('role', 'img');
     var slot = (w - pad) / n, bw = Math.max(2, slot * 0.38);
     days.forEach(function (d, i) {
       [['sessions', '#4f46e5', 0], ['leads', '#00a32a', 1]].forEach(function (s) {
@@ -176,7 +176,7 @@
       }
     });
     var wrap = node('div'); wrap.appendChild(svg);
-    var legend = node('div', 'aiwc-aw__legend');
+    var legend = node('div', 'aiworker-chat-aw__legend');
     [['sessions', '#4f46e5'], ['leads', '#00a32a']].forEach(function (s) { var i = node('i'); i.style.background = s[1]; legend.appendChild(i); legend.appendChild(document.createTextNode(t.cols[s[0]])); });
     wrap.appendChild(legend);
     return wrap;
@@ -199,7 +199,7 @@
         Object.keys(ALIAS).forEach(function (k) { row[k] = (row[k] || 0) + val(d, k); });
       });
     });
-    var cards = node('div', 'aiwc-aw__cards');
+    var cards = node('div', 'aiworker-chat-aw__cards');
     Object.keys(ALIAS).forEach(function (k) {
       if (k === 'voice' && !totals.voice) return;
       var cell = node('div'); cell.appendChild(node('b', '', fmt(totals[k]))); cell.appendChild(node('span', '', t.cols[k])); cards.appendChild(cell);
@@ -220,19 +220,26 @@
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
-    el.stats.appendChild(table);
+    var scroll = node('div', 'aiworker-chat-aw__scroll'); scroll.appendChild(table);
+    el.stats.appendChild(scroll);
   }
 
   function loadStats() {
     if (!el.stats) return;
+    var custom = el.period && el.period.value === 'custom';
+    if (el.range) el.range.hidden = !custom;
+    // a range waits for both dates; the earlier one may be typed second
+    if (custom && (!el.from.value || !el.to.value || el.from.value > el.to.value)) return;
     // a new period: the spinner again while kra.name answers
-    if (el.stats.querySelector('.aiwc-aw__meter, .aiwc-aw__cards')) { var wait = node('p', 'aiwc-aw__loading', ' ' + t.loading); wait.insertBefore(node('i', 'aiwc-aw__spin'), wait.firstChild); el.stats.textContent = ''; el.stats.appendChild(wait); }
-    call('stats', { period: el.period.value }).then(function (res) {
+    if (el.stats.querySelector('.aiworker-chat-aw__meter, .aiworker-chat-aw__cards')) { var wait = node('p', 'aiworker-chat-aw__loading', ' ' + t.loading); wait.insertBefore(node('i', 'aiworker-chat-aw__spin'), wait.firstChild); el.stats.textContent = ''; el.stats.appendChild(wait); }
+    var query = { period: el.period.value };
+    if (custom) { query.from = el.from.value; query.to = el.to.value; }
+    call('stats', query).then(function (res) {
       if (res.code === 200) renderStats(res.body);
       else { el.stats.textContent = ''; el.stats.appendChild(node('p', 'description', errorText(res))); }
     });
   }
-  if (el.period) el.period.addEventListener('change', loadStats);
+  [el.period, el.from, el.to].forEach(function (input) { if (input) input.addEventListener('change', loadStats); });
 
   // Dictation, as in the kra.name panel: MediaRecorder → this site's admin-ajax → kra.name's speech recognition (the
   // account's tokens); where kra.name cannot transcribe (no such call yet, not set up) the browser's own recognition.
@@ -279,7 +286,11 @@
   function safariHint() {
     var ua = navigator.userAgent || '';
     if (!/Safari\//.test(ua) || /Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS/.test(ua)) return;
-    try { if (window.localStorage.getItem('aiwc-mic-safari-hint')) return; window.localStorage.setItem('aiwc-mic-safari-hint', '1'); } catch (e) { return; }
+    try {
+      var key = 'aiworkerChatMicSafariHint';
+      if (window.localStorage.getItem(key)) return;
+      window.localStorage.setItem(key, '1');
+    } catch (e) { return; }
     setTimeout(function () { micSay(t.micSafari); }, 2500);
   }
   function insert(text) {
@@ -319,7 +330,7 @@
         micBusy = true; micState('busy'); micSay('');
         var ext = mime.indexOf('mp4') >= 0 ? 'm4a' : mime.indexOf('ogg') >= 0 ? 'ogg' : 'webm';
         var data = new FormData();
-        data.append('action', 'aiwc_assistant'); data.append('nonce', c.nonce); data.append('op', 'voice');
+        data.append('action', 'aiworker_chat_assistant'); data.append('nonce', c.nonce); data.append('op', 'voice');
         if (c.lang) data.append('lang', c.lang);
         data.append('audio', blob, 'voice.' + ext);
         fetch(c.ajax, { method: 'POST', body: data, credentials: 'same-origin' }).then(function (r) { return r.json(); }).catch(function () { return { code: 0, body: {} }; }).then(function (res) {
@@ -351,7 +362,7 @@
     if (el.account) el.account.textContent = [who, acc.plan_name || (me.plan && (me.plan.name || me.plan))].filter(function (x) { return typeof x === 'string' && x; }).join(' · ');
     // the wizard may be closed for this account (for example, a free account without tokens): say why, keep the statistics
     if (me.wizard && me.wizard.available === false) showError({ code: 422, body: { message: typeof me.wizard.blocked === 'string' ? me.wizard.blocked : t.e403 } });
-    if (!chats.some(function (ch) { return String(ch.id) === chatId; })) chatId = '';
+    if (!chatId || !chats.some(function (ch) { return String(ch.id) === chatId; })) { showError({ code: 404, body: {} }); return; }
     if (el.log) act('assistant');
     loadStats();
   });

@@ -18,15 +18,16 @@ const AIWORKER_CHAT_API = 'https://kra.name/app/api/v1';
  * copied to another browser comes back there without a WordPress session (see aiworker_chat_oauth_return()).
  */
 function aiworker_chat_oauth_redirect_uri(): string {
-    return admin_url('admin-post.php?action=aiwc_oauth_return');
+    return admin_url('admin-post.php?action=aiworker_chat_oauth_return');
 }
 
 /** The settings screen, optionally with a notice code. */
-function aiworker_chat_settings_url(string $notice = ''): string {
-    $url = Aiworker_Chat_Profile::url('aiworker-chat');
+function aiworker_chat_settings_url(string $notice = '', ?string $chatId = null): string {
+    $chatId = $chatId !== null && in_array($chatId, aiworker_chat_ids(), true) ? $chatId : aiworker_chat_current_id();
+    $url = add_query_arg('aiworker_chat_instance', $chatId, Aiworker_Chat_Profile::url('aiworker-chat'));
     if ($notice === '') return $url;
     // after connecting, step 1 shows the chat choice or, with a chat linked, the setup wizard
-    return add_query_arg('aiw_notice', $notice, $url).($notice === 'connected' ? '#aiwc-wizard' : '');
+    return add_query_arg('aiworker_chat_notice', $notice, $url).($notice === 'connected' ? '#aiworker-chat-wizard' : '');
 }
 
 /** Key for the token box: derived from the site's salts, never stored. */
@@ -92,6 +93,13 @@ function aiworker_chat_oauth_forget(): void {
     aiworker_chat_forget_me();
 }
 
+/** Drops the cached /plugin/me in every language after connection state changes. */
+function aiworker_chat_forget_me(): void {
+    foreach (['ru', 'en', 'uk'] as $lang) {
+        delete_transient('aiworker_chat_me_'.$lang);
+    }
+}
+
 /** A POST (form or JSON body) to kra.name without a token: the registration, token and revoke endpoints. */
 function aiworker_chat_oauth_post(string $url, array $body, bool $json = false): array {
     $args = ['timeout' => 20, 'redirection' => 0, 'headers' => ['Accept' => 'application/json']];
@@ -135,7 +143,7 @@ function aiworker_chat_oauth_client_id(): string {
 /** «Connect AI Worker»: register if needed, remember the PKCE verifier under a random state, go to the consent page. */
 function aiworker_chat_oauth_start(): void {
     if (! current_user_can('manage_options')) wp_die(esc_html__('You are not allowed to do this.', 'needtome-ai-chat'), 403);
-    check_admin_referer('aiwc_oauth_connect');
+    check_admin_referer('aiworker_chat_oauth_connect');
     aiworker_chat_oauth_begin();
 }
 
@@ -144,14 +152,15 @@ function aiworker_chat_oauth_start(): void {
  * sign-in link, maybe in another browser, so the return does not need the WordPress session of $user. $popup: started in
  * a popup, which closes at the end and sends the screen that opened it on.
  */
-function aiworker_chat_oauth_begin(string $then = '', int $user = 0, bool $remote = false, bool $popup = false): void {
+function aiworker_chat_oauth_begin(string $then = '', int $user = 0, bool $remote = false, bool $popup = false, string $chatId = ''): void {
+    if (! in_array($chatId, aiworker_chat_ids(), true)) $chatId = aiworker_chat_current_id();
     $clientId = aiworker_chat_oauth_client_id();
-    if ($clientId === '') aiworker_chat_oauth_done(['then' => $then, 'popup' => $popup], 'register_failed');
+    if ($clientId === '') aiworker_chat_oauth_done(['then' => $then, 'popup' => $popup, 'chat_id' => $chatId], 'register_failed');
     $verifier = rtrim(strtr(base64_encode(random_bytes(48)), '+/', '-_'), '=');
     $challenge = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
     // lowercase hex: sanitize_key() in the callback keeps it as is, so the transient key matches in any object cache
     $stateKey = bin2hex(random_bytes(16));
-    set_transient('aiworker_chat_oauth_'.$stateKey, ['verifier' => $verifier, 'client_id' => $clientId, 'user' => $user ?: get_current_user_id(), 'then' => $then, 'remote' => $remote, 'popup' => $popup, 'redirect' => aiworker_chat_oauth_redirect_uri()], 15 * MINUTE_IN_SECONDS);
+    set_transient('aiworker_chat_oauth_'.$stateKey, ['verifier' => $verifier, 'client_id' => $clientId, 'user' => $user ?: get_current_user_id(), 'then' => $then, 'remote' => $remote, 'popup' => $popup, 'chat_id' => $chatId, 'redirect' => aiworker_chat_oauth_redirect_uri()], 15 * MINUTE_IN_SECONDS);
 
     $url = add_query_arg(array_map('rawurlencode', [
         'response_type' => 'code',
@@ -167,12 +176,12 @@ function aiworker_chat_oauth_begin(string $then = '', int $user = 0, bool $remot
     wp_redirect($url);
     exit;
 }
-add_action('admin_post_aiwc_oauth_connect', 'aiworker_chat_oauth_start');
+add_action('admin_post_aiworker_chat_oauth_connect', 'aiworker_chat_oauth_start');
 
 /** The old return address (wp-admin/admin.php), for connections started before it moved to admin-post.php. */
 function aiworker_chat_oauth_callback(): void {
     // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Only routes the request; aiworker_chat_oauth_return() checks the state.
-    if (isset($_GET['page'], $_GET['aiw_oauth']) && $_GET['page'] === 'aiworker-chat' && $_GET['aiw_oauth'] === 'callback') aiworker_chat_oauth_return();
+    if (isset($_GET['page'], $_GET['aiworker_chat_oauth_route']) && $_GET['page'] === 'aiworker-chat' && $_GET['aiworker_chat_oauth_route'] === 'callback') aiworker_chat_oauth_return();
 }
 add_action('admin_init', 'aiworker_chat_oauth_callback', 0);
 
@@ -195,7 +204,7 @@ function aiworker_chat_oauth_return(): void {
     $result = aiworker_chat_oauth_post('https://kra.name/app/api/oauth/token', [
         'grant_type' => 'authorization_code',
         'code' => $code,
-        'redirect_uri' => (string) ($pending['redirect'] ?? admin_url('admin.php?page=aiworker-chat&aiw_oauth=callback')),
+        'redirect_uri' => (string) ($pending['redirect'] ?? admin_url('admin.php?page=aiworker-chat&aiworker_chat_oauth_route=callback')),
         'client_id' => $pending['client_id'],
         'code_verifier' => $pending['verifier'],
         'resource' => AIWORKER_CHAT_OAUTH_RESOURCE,
@@ -220,8 +229,8 @@ function aiworker_chat_oauth_return(): void {
     aiworker_chat_forget_me();
     aiworker_chat_oauth_done($pending, 'connected');
 }
-add_action('admin_post_aiwc_oauth_return', 'aiworker_chat_oauth_return');
-add_action('admin_post_nopriv_aiwc_oauth_return', 'aiworker_chat_oauth_return');
+add_action('admin_post_aiworker_chat_oauth_return', 'aiworker_chat_oauth_return');
+add_action('admin_post_nopriv_aiworker_chat_oauth_return', 'aiworker_chat_oauth_return');
 
 /**
  * Where the owner lands after the round trip: the settings screen for a site administrator in this browser; in a
@@ -230,10 +239,11 @@ add_action('admin_post_nopriv_aiwc_oauth_return', 'aiworker_chat_oauth_return');
 function aiworker_chat_oauth_done(array $pending, string $notice): void {
     // the sign-in for «Choose the chat automatically» finished: the settings screen may link the only chat once
     if ($notice === 'connected' && ($pending['then'] ?? '') === 'pick') aiworker_chat_autolink_mark((int) ($pending['user'] ?? 0));
+    if ($notice === 'connected' && function_exists('aiworker_chat_restore_removal_jobs')) aiworker_chat_restore_removal_jobs(null, true);
     if (current_user_can('manage_options')) {
-        $next = $notice === 'connected' ? aiworker_chat_signin_next((string) ($pending['then'] ?? '')) : aiworker_chat_settings_url($notice);
+        $next = $notice === 'connected' ? aiworker_chat_signin_next((string) ($pending['then'] ?? ''), (string) ($pending['chat_id'] ?? '')) : aiworker_chat_settings_url($notice, (string) ($pending['chat_id'] ?? ''));
         if (! empty($pending['popup'])) aiworker_chat_popup_done($next);
-        wp_safe_redirect($notice === 'connected' ? aiworker_chat_signin_next((string) ($pending['then'] ?? '')) : aiworker_chat_settings_url($notice));
+        wp_safe_redirect($next);
         exit;
     }
     $host = (string) wp_parse_url(home_url('/'), PHP_URL_HOST);
@@ -247,12 +257,12 @@ function aiworker_chat_oauth_done(array $pending, string $notice): void {
 /** «Disconnect»: revoke at kra.name, then forget the tokens here even if kra.name cannot be reached. */
 function aiworker_chat_oauth_disconnect(): void {
     if (! current_user_can('manage_options')) wp_die(esc_html__('You are not allowed to do this.', 'needtome-ai-chat'), 403);
-    check_admin_referer('aiwc_oauth_disconnect');
+    check_admin_referer('aiworker_chat_oauth_disconnect');
     aiworker_chat_oauth_revoke();
     wp_safe_redirect(aiworker_chat_settings_url('disconnected'));
     exit;
 }
-add_action('admin_post_aiwc_oauth_disconnect', 'aiworker_chat_oauth_disconnect');
+add_action('admin_post_aiworker_chat_oauth_disconnect', 'aiworker_chat_oauth_disconnect');
 
 function aiworker_chat_oauth_revoke(): void {
     // Forget the tokens under the refresh lock, then revoke them at kra.name without it: a refresh running now finishes
@@ -380,11 +390,6 @@ function aiworker_chat_oauth_access_token(bool $force = false, ?string &$busy = 
 }
 
 /**
- * A call to the plugin API at kra.name with the stored token; one refresh and retry on 401.
- *
- * @return array{code:int, body:array, error:string}
- */
-/**
  * GET answers fetched ahead, all at once (aiworker_chat_api_prefetch), by full URL; read once by aiworker_chat_api().
  * $set: store an answer; null: take the stored one out.
  */
@@ -425,7 +430,11 @@ function aiworker_chat_api_prefetch(array $calls, int $timeout = 15): void {
     }
 }
 
-/** $raw: a body sent as it is instead of JSON, ['type' => content type, 'data' => bytes] (the voice upload). */
+/**
+ * Calls kra.name's plugin API with the stored token; refreshes once and retries after a 401.
+ * $raw is a body sent as it is instead of JSON, ['type' => content type, 'data' => bytes] (the voice upload).
+ * @return array{code:int, body:array, error:string}
+ */
 function aiworker_chat_api(string $method, string $path, array $body = [], int $timeout = 20, array $raw = []): array {
     $stub = apply_filters('aiworker_chat_api_stub', null, $method, $path, $body);
     if (is_array($stub)) return $stub + ['code' => 200, 'body' => [], 'error' => ''];
@@ -468,5 +477,20 @@ function aiworker_chat_widget_version_seen(array $result): array {
     if ($result['code'] === 200 && (is_string($v) || is_int($v)) && preg_match('/^[A-Za-z0-9._-]{1,40}$/', (string) $v) && get_option('aiworker_chat_widget_version') !== (string) $v) {
         update_option('aiworker_chat_widget_version', (string) $v, true);
     }
+    if ($result['code'] === 200 && is_array($result['body']) && array_key_exists('widget_version', $result['body'])) set_transient('aiworker_chat_widget_version_fresh', 1, HOUR_IN_SECONDS);
     return $result;
 }
+
+/**
+ * kra.name updates the widget without telling the site, so a connected site asks for the build at most once an hour,
+ * in a background WP-Cron run started by a page view (never inside the visitor's request).
+ */
+function aiworker_chat_widget_version_due(): void {
+    if ((string) get_option('aiworker_chat_widget_version', '') === '' || get_transient('aiworker_chat_widget_version_fresh')) return;
+    if (! wp_next_scheduled('aiworker_chat_widget_version_refresh')) wp_schedule_single_event(time(), 'aiworker_chat_widget_version_refresh');
+}
+
+add_action('aiworker_chat_widget_version_refresh', static function (): void {
+    set_transient('aiworker_chat_widget_version_fresh', 1, HOUR_IN_SECONDS);   // one try an hour, also when kra.name is down
+    if (aiworker_chat_is_connected()) aiworker_chat_api('GET', '/plugin/me', [], 10);
+});

@@ -7,6 +7,14 @@
 
 if (! defined('ABSPATH')) exit;
 
+/** The channel block's markup: post HTML plus its tab buttons and ARIA roles. */
+function aiworker_chat_channels_kses(): array {
+    $allowed = wp_kses_allowed_html('post');
+    $allowed['button'] = ['type' => true, 'role' => true, 'class' => true, 'aria-selected' => true, 'aria-controls' => true];
+    $allowed['div']['role'] = true;
+    return $allowed;
+}
+
 /** The channels a web chat can answer in: type => [label, what it needs, steps, note]. */
 function aiworker_chat_channel_guides(): array {
     $botfather = '<a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a>';
@@ -54,7 +62,7 @@ function aiworker_chat_channel_guides(): array {
 
 /** Channel states of the linked chat from kra.name: type => connected|not_connected|error; empty when unknown. Cached 5 minutes. */
 function aiworker_chat_channel_states(): array {
-    $chat = (int) get_option(AIWORKER_CHAT_LINKED_OPTION, 0);
+    $chat = aiworker_chat_linked_id();
     if ($chat <= 0 || ! aiworker_chat_is_connected()) return [];
     $key = 'aiworker_chat_channels_'.$chat;
     $cached = get_transient($key);
@@ -75,47 +83,66 @@ function aiworker_chat_channel_states(): array {
     return $states;
 }
 
-function aiworker_chat_channels_block(): void {
+function aiworker_chat_channels_block(): string {
+    $html = '';
+
     $guides = aiworker_chat_channel_guides();
     $states = aiworker_chat_channel_states();
     $allowed = ['a' => ['href' => [], 'target' => [], 'rel' => []], 'code' => []];
     $labels = ['connected' => __('connected', 'needtome-ai-chat'), 'not_connected' => __('not connected', 'needtome-ai-chat'), 'error' => __('needs attention', 'needtome-ai-chat')];
-    ?>
-    <div class="aiwc-channels">
-      <h3><?php esc_html_e('Your online chat can be connected not only to the site', 'needtome-ai-chat'); ?></h3>
-      <p class="description"><?php esc_html_e('The same consultant answers in messengers too: with the same knowledge base, and the leads arrive the same way as from the site. Available on every plan with online chats, the free one too.', 'needtome-ai-chat'); ?></p>
-      <div class="aiwc-channels__tabs" role="tablist">
-        <?php $first = true; foreach ($guides as $type => $g) : $state = $states[$type] ?? ''; ?>
-          <button type="button" role="tab" class="aiwc-channels__tab<?php echo $first ? ' is-active' : ''; ?>" aria-selected="<?php echo $first ? 'true' : 'false'; ?>" aria-controls="aiwc-channel-<?php echo esc_attr($type); ?>"><?php echo esc_html($g[0]); ?><?php
+    $html .= '
+    <div class="aiworker-chat-channels">
+      <h3>';
+ $html .= esc_html__('Your online chat can be connected not only to the site', 'needtome-ai-chat'); $html .= '</h3>
+      <p class="description">';
+ $html .= esc_html__('The same consultant answers in messengers too: with the same knowledge base, and the leads arrive the same way as from the site. Available on every plan with online chats, the free one too.', 'needtome-ai-chat'); $html .= '</p>
+      <div class="aiworker-chat-channels__tabs" role="tablist">
+        ';
+ $first = true; foreach ($guides as $type => $g) : $state = $states[$type] ?? ''; $html .= '
+          <button type="button" role="tab" class="aiworker-chat-channels__tab';
+ $html .= $first ? ' is-active' : ''; $html .= '" aria-selected="';
+ $html .= $first ? 'true' : 'false'; $html .= '" aria-controls="aiworker-chat-channel-';
+ $html .= esc_attr($type); $html .= '">';
+ $html .= esc_html($g[0]);
             // marked only when it says something: connected, or connected with a problem (not connected is the usual case)
-            if ($state === 'connected') : ?> <span class="aiwc-channels__ok" title="<?php echo esc_attr($labels[$state]); ?>">✓</span><?php elseif ($state === 'error') : ?> <span class="aiwc-channels__dot aiwc-channels__dot--error" title="<?php echo esc_attr($labels[$state]); ?>"></span><?php endif; ?></button>
-        <?php $first = false; endforeach; ?>
+            if ($state === 'connected') : $html .= ' <span class="aiworker-chat-channels__ok" title="';
+ $html .= esc_attr($labels[$state]); $html .= '">✓</span>';
+ elseif ($state === 'error') : $html .= ' <span class="aiworker-chat-channels__dot aiworker-chat-channels__dot--error" title="';
+ $html .= esc_attr($labels[$state]); $html .= '"></span>';
+ endif; $html .= '</button>
+        ';
+ $first = false; endforeach; $html .= '
       </div>
-      <?php $first = true; foreach ($guides as $type => $g) : $state = $states[$type] ?? ''; ?>
-        <div class="aiwc-channels__panel" id="aiwc-channel-<?php echo esc_attr($type); ?>" role="tabpanel"<?php echo $first ? '' : ' hidden'; ?>>
-          <p><b><?php
+      ';
+ $first = true; foreach ($guides as $type => $g) : $state = $states[$type] ?? ''; $html .= '
+        <div class="aiworker-chat-channels__panel" id="aiworker-chat-channel-';
+ $html .= esc_attr($type); $html .= '" role="tabpanel"';
+ $html .= $first ? '' : ' hidden'; $html .= '>
+          <p><b>';
+
             /* translators: %s: what the channel needs, e.g. «your own Telegram bot» */
-            echo esc_html(sprintf(__('You need: %s.', 'needtome-ai-chat'), $g[1])); ?></b><?php if ($state === 'connected' || $state === 'error') : ?> <span class="aiwc-pill aiwc-pill--<?php echo $state === 'connected' ? 'ok' : ($state === 'error' ? 'err' : 'off'); ?>"><?php echo esc_html($labels[$state]); ?></span><?php endif; ?></p>
-          <ol class="aiwc-steps">
-            <?php foreach ($g[2] as $step) : ?><li><?php echo wp_kses($step, $allowed); ?></li><?php endforeach; ?>
+            $html .= esc_html(sprintf(__('You need: %s.', 'needtome-ai-chat'), $g[1])); $html .= '</b>';
+ if ($state === 'connected' || $state === 'error') : $html .= ' <span class="aiworker-chat-pill aiworker-chat-pill--';
+ $html .= $state === 'connected' ? 'ok' : ($state === 'error' ? 'err' : 'off'); $html .= '">';
+ $html .= esc_html($labels[$state]); $html .= '</span>';
+ endif; $html .= '</p>
+          <ol class="aiworker-chat-steps">
+            ';
+ foreach ($g[2] as $step) : $html .= '<li>';
+ $html .= wp_kses($step, $allowed); $html .= '</li>';
+ endforeach; $html .= '
           </ol>
-          <?php if ($g[3] !== '') : ?><p class="description"><?php echo esc_html($g[3]); ?></p><?php endif; ?>
+          ';
+ if ($g[3] !== '') : $html .= '<p class="description">';
+ $html .= esc_html($g[3]); $html .= '</p>';
+ endif; $html .= '
         </div>
-      <?php $first = false; endforeach; ?>
+      ';
+ $first = false; endforeach; $html .= '
     </div>
-    <?php ob_start(); ?>
-    (function () {
-      var root = document.currentScript.previousElementSibling;
-      root.querySelectorAll('.aiwc-channels__tab').forEach(function (tab) {
-        tab.addEventListener('click', function () {
-          root.querySelectorAll('.aiwc-channels__tab').forEach(function (t) {
-            var on = t === tab;
-            t.classList.toggle('is-active', on); t.setAttribute('aria-selected', on ? 'true' : 'false');
-            document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
-          });
-        });
-      });
-    })();
-    <?php wp_print_inline_script_tag((string) ob_get_clean()); ?>
-    <?php
+
+    ';
+
+
+    return $html;
 }

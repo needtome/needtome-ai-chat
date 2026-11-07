@@ -2,7 +2,7 @@
 /**
  * Site-wide content for the chat's knowledge base, besides posts: the text widgets of each widget area (sidebars,
  * footers) and the ACF options pages (contacts, opening hours and similar settings of the site). Each widget area
- * and each options page is one document; they are few, so every pass sends them all.
+ * and each options page is one document; unchanged documents are skipped unless the pass is forced.
  */
 
 if (! defined('ABSPATH')) exit;
@@ -51,11 +51,6 @@ function aiworker_chat_kb_acf_option_pages(): array {
     return $out;
 }
 
-/** Whether there is anything site-wide to offer on this site (the settings card shows the rows only then). */
-function aiworker_chat_kb_site_available(): array {
-    return ['widgets' => (bool) aiworker_chat_kb_widget_areas(), 'acf_options' => (bool) aiworker_chat_kb_acf_option_pages()];
-}
-
 /** The site-wide documents chosen in the settings, each with its id «widgets:<area>» or «acf-options:<page>». */
 function aiworker_chat_kb_site_docs(?array $kb = null): array {
     $kb = $kb ?? aiworker_chat_kb_options();
@@ -89,22 +84,32 @@ function aiworker_chat_kb_site_docs(?array $kb = null): array {
 }
 
 /**
- * Worker step: sends every chosen site-wide document and deletes the ones sent before that are gone now. Returns
+ * Worker step: sends changed chosen site-wide documents and deletes the ones sent before that are gone now. Returns
  * the ids now at kra.name, or null after a failure (recorded and rescheduled).
  */
-function aiworker_chat_kb_site_step(array $kb, array &$rejected, string $token): ?array {
+function aiworker_chat_kb_site_step(array $kb, array &$rejected, string $token, bool $force = false, bool $reconcile = false): ?array {
     $docs = aiworker_chat_kb_site_docs($kb);
     $ids = array_column($docs, 'id');
-    $parts = [];
-    foreach ($docs as $doc) $parts = array_merge($parts, aiworker_chat_kb_parts($doc));
+    $parts = []; $current = [];
+    $stored = (array) aiworker_chat_kb_hashes()['documents'];
+    foreach ($docs as $doc) {
+        $docParts = aiworker_chat_kb_parts($doc);
+        $current = array_merge($current, $docParts);
+        if (! aiworker_chat_kb_docs_unchanged($docParts, $force, $stored)) $parts = array_merge($parts, $docParts);
+    }
+    $currentRoots = array_values(array_unique(array_column($current, 'id')));
+    foreach ($currentRoots as $root) foreach (array_keys($rejected) as $rejectedId) {
+        if ((string) $rejectedId === (string) $root || strpos((string) $rejectedId, (string) $root.'#') === 0) unset($rejected[$rejectedId]);
+    }
     if ($parts) { $r = aiworker_chat_kb_send_docs($parts, $rejected, $token); if ($r !== '') { aiworker_chat_kb_fail($r, ''); return null; } }
     $gone = array_values(array_diff((array) (aiworker_chat_kb_state()['site_ids'] ?? []), $ids));
-    if ($gone) {
+    if ($gone && ! $reconcile) {
         if (! aiworker_chat_kb_lock_touch($token)) return null;
         [$code, , $err] = aiworker_chat_kb_request('POST', 'documents/delete', ['site' => home_url('/'), 'ids' => $gone]);
         if ($err !== '') { aiworker_chat_kb_fail($code === 401 ? 'auth' : ($code === 429 ? 'retry:60' : 'error'), $err); return null; }
+        aiworker_chat_kb_hashes_drop_documents($gone);
     }
-    aiworker_chat_kb_state(['site_ids' => $ids]);
+    if (! $reconcile) aiworker_chat_kb_state(['site_ids' => $ids]);
     return $ids;
 }
 
@@ -112,15 +117,15 @@ function aiworker_chat_kb_site_step(array $kb, array &$rejected, string $token):
 function aiworker_chat_kb_enqueue_site(): void {
     $kb = aiworker_chat_kb_options();
     if (! $kb['enabled'] || (empty($kb['widgets']) && empty($kb['acf_options']) && ! aiworker_chat_kb_state()['site_ids'])) return;
-    add_option(AIWORKER_CHAT_KB_INBOX.str_replace('-', '', wp_generate_uuid4()), ['ids' => [], 'reconcile' => 0, 'site' => 1], '', false);
-    if (! wp_next_scheduled('aiworker_chat_kb_sync')) wp_schedule_single_event(time() + 30, 'aiworker_chat_kb_sync');
+    add_option(aiworker_chat_option_name(AIWORKER_CHAT_KB_INBOX).str_replace('-', '', wp_generate_uuid4()), ['ids' => [], 'reconcile' => 0, 'site' => 1], '', false);
+    if (! wp_next_scheduled('aiworker_chat_kb_sync', [aiworker_chat_current_id()])) wp_schedule_single_event(time() + 30, 'aiworker_chat_kb_sync', [aiworker_chat_current_id()]);
 }
 
 // Widgets are edited in Appearance → Widgets or the Customizer; both save these options.
 foreach (['sidebars_widgets', 'widget_text', 'widget_custom_html', 'widget_block'] as $aiworker_chat_widget_option) {
-    add_action('update_option_'.$aiworker_chat_widget_option, 'aiworker_chat_kb_enqueue_site');
+    aiworker_chat_on_each('update_option_'.$aiworker_chat_widget_option, 'aiworker_chat_kb_enqueue_site');
 }
 // An ACF options page was saved (its post id is a string such as «options»).
-add_action('acf/save_post', static function ($postId): void {
+aiworker_chat_on_each('acf/save_post', static function ($postId): void {
     if (! is_numeric($postId) && is_string($postId) && strpos($postId, 'term_') !== 0 && strpos($postId, 'user_') !== 0 && strpos($postId, 'comment_') !== 0) aiworker_chat_kb_enqueue_site();
 }, 20);

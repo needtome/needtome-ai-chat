@@ -13,6 +13,7 @@ The chat, its knowledge base and the leads live at [kra.name](https://kra.name/)
 - The consultant and the chat texts in every language: greeting, quick questions, name and caption, the AI notice and the greeting on page open.
 - Leads and where they go: e-mail, Telegram, Slack, Microsoft Teams, Discord, Google Sheets, Notion, a CRM or a webhook.
 - The knowledge base: posts, pages, WooCommerce products, ACF fields and widgets sent from the site, plus sources and questions and answers.
+- Several chats on one site, each with its own key, pages, look and knowledge base.
 - A setup wizard with voice input, usage limits and statistics.
 
 Install: copy this folder to `wp-content/plugins/needtome-ai-chat` (or upload it as a ZIP), activate the plugin and open **NeedToMe → AI Chat**. Details on data sent to kra.name are in [readme.txt](readme.txt) under «External services».

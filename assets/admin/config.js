@@ -1,0 +1,1 @@
+window.aiworkerChatAdmin = window.aiworkerChatAdmin || {};
