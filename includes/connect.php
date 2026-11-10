@@ -237,8 +237,6 @@ add_action('admin_post_nopriv_aiworker_chat_oauth_return', 'aiworker_chat_oauth_
  * browser without one (a copied sign-in link) a short page that sends them back to the first browser.
  */
 function aiworker_chat_oauth_done(array $pending, string $notice): void {
-    // the sign-in for «Choose the chat automatically» finished: the settings screen may link the only chat once
-    if ($notice === 'connected' && ($pending['then'] ?? '') === 'pick') aiworker_chat_autolink_mark((int) ($pending['user'] ?? 0));
     if ($notice === 'connected' && function_exists('aiworker_chat_restore_removal_jobs')) aiworker_chat_restore_removal_jobs(null, true);
     if (current_user_can('manage_options')) {
         $next = $notice === 'connected' ? aiworker_chat_signin_next((string) ($pending['then'] ?? ''), (string) ($pending['chat_id'] ?? '')) : aiworker_chat_settings_url($notice, (string) ($pending['chat_id'] ?? ''));

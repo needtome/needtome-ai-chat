@@ -77,6 +77,7 @@ if (window.jQuery && window.jQuery.fn && window.jQuery.fn.wpColorPicker) {
         requestAnimationFrame(function () {
           queued = false;
           var colors = {}; c.keys.forEach(function (k) { var i = form.querySelector('[name="' + c.option + '[colors][' + k + ']"]'), v = i && hex(i.value); if (v) colors[k] = v; });
+          var at = form.querySelector('[name="' + c.option + '[colors][accent_text]"]'); colors.accent_text = at && /^(auto|light|dark)$/.test(at.value) ? at.value : c.chatAccentText; // empty: the chat's own setting
           var lang = (field('lang') && field('lang').value) || 'auto', l = lang === 'auto' ? c.autoLang : lang, extra = {};
           // the greeting and quick questions as typed in «Chat texts», in the preview's language, before saving
           var g = document.querySelector('[data-cs-field="texts.' + l + '.greeting"]'), q = document.querySelectorAll('[data-cs-sugg="' + l + '"]');

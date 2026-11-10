@@ -21,7 +21,7 @@ Connect several chats to the same site, each with its own appearance, page rules
 
 What you set in WordPress:
 
-* Chats: add public keys manually or select several chats from your AI Worker account. Each selected chat is linked separately, and connection errors are shown for that chat.
+* Chats: add public keys manually or choose chats from your AI Worker account, one click per chat. A connection error is shown next to that chat.
 * Look: theme, colour scheme (light, dim, dark or the visitor's system setting), every colour of the window, position of the button.
 * Loading: at once, after a delay, on the first scroll or on interaction — the chat does not slow your pages down.
 * Language: fixed or automatic (URL prefix, language subdomain, HTML lang, browser).
@@ -105,7 +105,7 @@ When a chat is displayed, the plugin merges the chat's required sources into CSP
 = 1.0.0 =
 * First public release.
 * Several chats per site, with independent settings, content sync, statistics and stacked launchers.
-* Connect the site to an AI Worker account at kra.name with one button; a single chat is linked at once.
+* Connect the site to an AI Worker account at kra.name with one button, then choose its chat or create a new one; nothing is linked without your click.
 * Set up the chat in WordPress: look, chat button icon (a ready one or your own image), position, loading, language and pages; the consultant and chat texts in every language; lead collection and delivery (e-mail, Telegram, Slack, Microsoft Teams, Discord, Google Sheets, Notion, CRM, webhook).
 * Live preview of the real chat button and window, following unsaved edits.
 * Knowledge base from the site: posts, pages, ACF fields, widgets and the WooCommerce catalog, kept up to date; sources and questions and answers edited in the plugin.

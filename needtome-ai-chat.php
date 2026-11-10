@@ -34,6 +34,8 @@ require_once plugin_dir_path(__FILE__).'includes/lazy-blocks.php';
 require_once plugin_dir_path(__FILE__).'includes/kb-remote.php';
 require_once plugin_dir_path(__FILE__).'includes/needtome-profile.php';
 
+/** Text and icons on the accent colour (kra.name colors.accent_text); not stored = the chat's own setting at kra.name. */
+const AIWORKER_CHAT_ACCENT_TEXT_MODES = ['auto', 'light', 'dark'];
 const AIWORKER_CHAT_COLOR_KEYS = ['header_bg', 'header_text', 'bg', 'surface', 'text', 'muted', 'border', 'visitor_bubble', 'visitor_text', 'ai_bubble', 'input_bg'];
 
 // The settings screen follows Polylang's admin language filter (?lang=ru or the saved filter),
@@ -106,6 +108,10 @@ function aiworker_chat_schemes(): array {
         'dark' => __('Dark', 'needtome-ai-chat'), 'auto' => __('Follow the visitor\'s system', 'needtome-ai-chat')];
 }
 
+function aiworker_chat_accent_text_modes(): array {
+    return ['' => __('As set for the chat at kra.name', 'needtome-ai-chat'), 'auto' => __('Auto', 'needtome-ai-chat'), 'light' => __('White', 'needtome-ai-chat'), 'dark' => __('Black', 'needtome-ai-chat')];
+}
+
 function aiworker_chat_color_labels(): array {
     return ['header_bg' => __('Header: background', 'needtome-ai-chat'), 'header_text' => __('Header: text', 'needtome-ai-chat'), 'bg' => __('Conversation background', 'needtome-ai-chat'),
         'surface' => __('Window and panels', 'needtome-ai-chat'), 'text' => __('Main text', 'needtome-ai-chat'), 'muted' => __('Secondary text', 'needtome-ai-chat'),
@@ -149,6 +155,8 @@ function aiworker_chat_sanitize($input): array {
         $hex = sanitize_hex_color((string) $v);
         if (in_array($k, AIWORKER_CHAT_COLOR_KEYS, true) && $hex && strlen($hex) === 7) $out['colors'][$k] = strtolower($hex);
     }
+    $accentText = (string) ($input['colors']['accent_text'] ?? '');
+    if (in_array($accentText, AIWORKER_CHAT_ACCENT_TEXT_MODES, true)) $out['colors']['accent_text'] = $accentText;
     $out['position'] = ($input['position'] ?? '') === 'left' ? 'left' : 'right';
     // the launcher's offset for this site in pixels; empty = the chat's own offset at kra.name
     foreach (['offset_x', 'offset_y'] as $k) { $v = trim((string) ($input[$k] ?? '')); $out[$k] = preg_match('/^-?\d{1,3}$/', $v) ? (string) max(-300, min(300, (int) $v)) : ''; }
@@ -306,6 +314,7 @@ function aiworker_chat_check(string $key, bool $fresh = false): array {
             $result['persona'] = ['name' => sanitize_text_field((string) ($body['name'] ?? '')), 'title' => sanitize_text_field((string) ($body['title'] ?? '')),
                 'tab_label' => sanitize_text_field((string) ($body['tab_label'] ?? '')), 'avatar' => esc_url_raw((string) ($body['avatar'] ?? ''), ['https']),
                 'scheme' => in_array($body['scheme'] ?? '', ['light', 'dim', 'dark', 'auto'], true) ? $body['scheme'] : 'light',
+                'accent_text' => in_array($body['colors']['accent_text'] ?? '', AIWORKER_CHAT_ACCENT_TEXT_MODES, true) ? $body['colors']['accent_text'] : 'auto',
                 // the greeting (one per language) and the quick questions, so the preview shows the chat's own
                 'greeting' => array_map(static function ($g): string { return sanitize_textarea_field((string) $g); }, array_filter((array) ($body['greeting'] ?? []), 'is_string')),
                 'suggestions' => array_values(array_filter(array_map('sanitize_text_field', array_map('strval', array_filter((array) ($body['suggestions'] ?? []), 'is_scalar'))), 'strlen')),
@@ -685,8 +694,10 @@ function aiworker_chat_settings_page(): void {
                 wp_kses(sprintf(/* translators: 1: this chat's shortcode, 2: the HTML element */ __('Put the %1$s shortcode into a post or page (or %2$s into the theme). Pages without the block show the usual button.', 'needtome-ai-chat'), $shortcode, '<code>&lt;div id="'.esc_html((string) $o['mount']).'"&gt;&lt;/div&gt;</code>'), ['code' => []]), 'aiworker-chat-mount', 'aiworker-chat-inline-only');
             aiworker_chat_row(__('Block height, px', 'needtome-ai-chat'), '<input id="aiworker-chat-height" type="number" min="320" max="1200" name="'.$name.'[height]" value="'.esc_attr((string) $o['height']).'">', '', 'aiworker-chat-height', 'aiworker-chat-inline-only');
             aiworker_chat_row(__('Accent colour', 'needtome-ai-chat'), '<input id="aiworker-chat-color" class="aiworker-chat-color aiworker-chat-color--accent" type="text" name="'.$name.'[color]" value="'.esc_attr($o['color']).'" data-default-color="#4f46e5">', '', 'aiworker-chat-color');
+            aiworker_chat_row(__('Text and icon colour on the main colour', 'needtome-ai-chat'), $sel('colors][accent_text', aiworker_chat_accent_text_modes(), (string) ($o['colors']['accent_text'] ?? ''), 'aiworker-chat-accent-text'),
+                esc_html__('The header, the visitor\'s messages, the send button and the chat button icon. «Auto» picks white when it is readable on the main colour, otherwise black.', 'needtome-ai-chat'), 'aiworker-chat-accent-text');
             aiworker_chat_row(__('Colour scheme', 'needtome-ai-chat'), $sel('scheme', aiworker_chat_schemes(), (string) $o['scheme'], 'aiworker-chat-scheme'), esc_html__('«Follow the visitor\'s system» switches between light and dark by the device setting.', 'needtome-ai-chat'), 'aiworker-chat-scheme');
-            $colors = '<details class="aiworker-chat-colors"'.(! empty($o['colors']) ? ' open' : '').'><summary>'.esc_html__('Change separate colours', 'needtome-ai-chat').'</summary><p class="description">'.esc_html__('Empty means the scheme\'s colour.', 'needtome-ai-chat').'</p><div class="aiworker-chat-colors__grid">';
+            $colors = '<details class="aiworker-chat-colors"'.(array_diff_key((array) $o['colors'], ['accent_text' => 1]) ? ' open' : '').'><summary>'.esc_html__('Change separate colours', 'needtome-ai-chat').'</summary><p class="description">'.esc_html__('Empty means the scheme\'s colour.', 'needtome-ai-chat').'</p><div class="aiworker-chat-colors__grid">';
             foreach (aiworker_chat_color_labels() as $k => $label) $colors .= '<div class="aiworker-chat-colors__item"><span class="aiworker-chat-colors__name">'.esc_html($label).'</span><input class="aiworker-chat-color" type="text" name="'.$name.'[colors]['.esc_attr($k).']" value="'.esc_attr((string) ($o['colors'][$k] ?? '')).'" data-default-color="" aria-label="'.esc_attr($label).'"></div>';
             aiworker_chat_row(__('Advanced colours', 'needtome-ai-chat'), $colors.'</div></details>');
             if (count(aiworker_chat_ids()) > 1) aiworker_chat_row(__('Order on the page', 'needtome-ai-chat'), '<input type="number" min="0" max="9999" name="'.$name.'[stack_order]" value="'.esc_attr((string) $o['stack_order']).'">', __('0 is at the bottom; the next chat is placed above it.', 'needtome-ai-chat'));
@@ -757,12 +768,14 @@ function aiworker_chat_settings_page(): void {
  */
 function aiworker_chat_preview(array $o, array $persona, bool $voiceAllowed): void {
     $colors = [];
-    foreach ((array) $o['colors'] as $k => $v) if (in_array($k, AIWORKER_CHAT_COLOR_KEYS, true)) $colors[] = $k.':'.$v;
+    foreach ((array) $o['colors'] as $k => $v) if (in_array($k, AIWORKER_CHAT_COLOR_KEYS, true) || ($k === 'accent_text' && in_array($v, AIWORKER_CHAT_ACCENT_TEXT_MODES, true))) $colors[] = $k.':'.$v;
     // «auto» in the preview speaks the language this settings page is shown in: Polylang's admin filter
     // (?lang=ru) when it is set, otherwise the user's admin language.
     $autoLang = substr(aiworker_chat_polylang_admin_locale() ?: (string) get_user_locale(), 0, 2) ?: 'en';
     $lang = aiworker_chat_preview_lang($o);
     $chatScheme = (string) ($persona['scheme'] ?? 'light');
+    $chatAccentText = in_array($persona['accent_text'] ?? '', AIWORKER_CHAT_ACCENT_TEXT_MODES, true) ? (string) $persona['accent_text'] : 'auto';
+    if (! isset($o['colors']['accent_text'])) $colors[] = 'accent_text:'.$chatAccentText;
     $hasKey = aiworker_chat_valid_key((string) ($o['key'] ?? ''));
     $widgetVersion = (string) get_option('aiworker_chat_widget_version', '');
     if (! preg_match('/^[A-Za-z0-9._-]{1,40}$/', $widgetVersion)) $widgetVersion = gmdate('YmdH');
@@ -781,7 +794,7 @@ function aiworker_chat_preview(array $o, array $persona, bool $voiceAllowed): vo
     if ($o['offset_x'] !== '') $attrs['data-offset-x'] = (string) $o['offset_x'];
     if ($o['offset_y'] !== '') $attrs['data-offset-y'] = (string) $o['offset_y'];
     $attrs['defer'] = true;
-    $cfg = wp_json_encode(['option' => aiworker_chat_option_name(AIWORKER_CHAT_OPTION), 'chatScheme' => $chatScheme, 'keys' => AIWORKER_CHAT_COLOR_KEYS, 'autoLang' => $autoLang, 'voiceAllowed' => $voiceAllowed, 'script' => $attrs, 'autoLoad' => $hasKey], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+    $cfg = wp_json_encode(['option' => aiworker_chat_option_name(AIWORKER_CHAT_OPTION), 'chatScheme' => $chatScheme, 'chatAccentText' => $chatAccentText, 'keys' => AIWORKER_CHAT_COLOR_KEYS, 'autoLang' => $autoLang, 'voiceAllowed' => $voiceAllowed, 'script' => $attrs, 'autoLoad' => $hasKey], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     ?>
       <div class="aiworker-chat-preview" data-config="<?php echo esc_attr((string) $cfg); ?>">
       <h2><?php esc_html_e('Live preview', 'needtome-ai-chat'); ?></h2>

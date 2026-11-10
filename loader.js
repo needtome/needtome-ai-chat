@@ -49,7 +49,7 @@
     script.setAttribute('data-color', options.color || '#4f46e5');
     if (/^(light|dim|dark|auto)$/.test(options.scheme || '')) script.setAttribute('data-scheme', options.scheme);
     var colors = [];
-    if (options.colors && typeof options.colors === 'object') for (var k in options.colors) if (/^[a-z_]+$/.test(k) && /^#[0-9a-fA-F]{6}$/.test(options.colors[k] || '')) colors.push(k + ':' + options.colors[k]);
+    if (options.colors && typeof options.colors === 'object') for (var k in options.colors) if (/^[a-z_]+$/.test(k) && (/^#[0-9a-fA-F]{6}$/.test(options.colors[k] || '') || (k === 'accent_text' && /^(auto|light|dark)$/.test(options.colors[k] || '')))) colors.push(k + ':' + options.colors[k]);
     if (colors.length) script.setAttribute('data-colors', colors.join(';'));
     script.setAttribute('data-position', options.position || 'right');
     // the launcher's offset for this site (empty = the chat's own offset at kra.name)
