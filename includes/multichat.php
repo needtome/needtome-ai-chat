@@ -401,9 +401,13 @@ function aiworker_chat_queue_removal(int $postId): void {
         $hashes = aiworker_chat_kb_hashes();
         $docId = 'post:'.$postId;
         $documentWasSent = ! empty($hashes['documents'][$docId]);
-        $productWasSent = aiworker_chat_products_on($kb) && ! empty($hashes['products'][(string) $postId]);
-        // Only queue records that this chat actually received; unrelated types and never-exported posts are ignored.
-        if (! $documentWasSent && ! $productWasSent) return;
+        // A product sent earlier stays at kra.name after the catalog is turned off, so its removal does not depend on the catalog switch.
+        $productWasSent = ! empty($hashes['products'][(string) $postId]);
+        // A post of a synced type may still be on its first upload: the worker shares the sync lock and checks the hashes after it.
+        $type = (string) get_post_type($postId);
+        $mayBeInFlight = ! empty($kb['enabled']) && $type !== '' && (array_key_exists($type, (array) $kb['types']) || ($type === 'product' && aiworker_chat_products_on($kb)));
+        // Only queue records that this chat received or may be receiving; unrelated types and never-exported posts are ignored.
+        if (! $documentWasSent && ! $productWasSent && ! $mayBeInFlight) return;
         add_option(aiworker_chat_option_name('aiworker_chat_kb_delete_in_').str_replace('-', '', wp_generate_uuid4()), ['id' => $postId], '', false);
         if (! wp_next_scheduled('aiworker_chat_kb_remove', [aiworker_chat_current_id()])) wp_schedule_single_event(time() + 30, 'aiworker_chat_kb_remove', [aiworker_chat_current_id()]);
     });
@@ -473,25 +477,28 @@ function aiworker_chat_remove_process(string $id): void {
                     $hashes = aiworker_chat_kb_hashes();
                     $docId = 'post:'.$postId;
                     $docDelete = ! empty($hashes['documents'][$docId]) && ! $doc ? [$docId] : [];
-                    $productDelete = aiworker_chat_products_on($kb) && ! empty($hashes['products'][(string) $postId]) && ! $product ? [(string) $postId] : [];
+                    $productDelete = ! empty($hashes['products'][(string) $postId]) && ! $product ? [(string) $postId] : [];
                     foreach (['documents/delete' => $docDelete, 'products/delete' => $productDelete] as $path => $ids) {
                         if (! $ids) continue;
                         if (! aiworker_chat_kb_lock_touch($token)) { $retry = true; break 2; }
                         [$code, , $error] = aiworker_chat_kb_request('POST', $path, ['site' => home_url('/'), 'ids' => $ids], 60);
                         if ($error !== '') {
-                            if ($code >= 400 && $code < 500 && $code !== 401 && $code !== 429) {
+                            if (in_array($code, [400, 410, 413, 422], true)) {
                                 // Only this record was rejected: park it and carry on with the rest of the batch.
                                 $entry['blocked'] = 'permanent';
                                 update_option($row->option_name, $entry, false);
                                 $rejected = $error;
                                 continue 2;
                             }
-                            // Authorization and temporary failures affect every record, so stop; kb_fail schedules the retry.
+                            // Every other failure concerns the whole chat or is temporary, so stop the batch.
+                            // A 401 parks the record until the owner signs in again (aiworker_chat_restore_removal_jobs);
+                            // a refused or missing chat (403, 404) is retried hourly, busy answers in a minute, the rest after the usual backoff.
                             if ($code === 401) {
                                 $entry['blocked'] = 'auth';
                                 update_option($row->option_name, $entry, false);
                             }
-                            aiworker_chat_kb_fail($code === 401 ? 'auth' : ($code === 429 ? 'retry:60' : 'error'), $error, 'aiworker_chat_kb_remove');
+                            $result = $code === 401 ? 'auth' : (in_array($code, [403, 404], true) ? 'retry:3600' : (in_array($code, [408, 409, 423, 425, 429], true) ? 'retry:60' : 'error'));
+                            aiworker_chat_kb_fail($result, $error, 'aiworker_chat_kb_remove');
                             $rejected = '';
                             break 2;
                         }

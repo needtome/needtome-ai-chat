@@ -58,6 +58,7 @@ if (window.jQuery && window.jQuery.fn && window.jQuery.fn.wpColorPicker) {
           if (previewLoad) previewLoad.hidden = true;
           if (previewOpen) previewOpen.hidden = false;
           if (previewOpen) syncLabel();
+          push(); // the preview starts from the saved settings; show what is in the form now
         });
         script.addEventListener('error', function () {
           previewStarted = false;
