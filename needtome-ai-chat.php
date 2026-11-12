@@ -260,8 +260,11 @@ function aiworker_chat_setup_steps(string $key, ?array $check): array {
             // the chat linked here: its consultant and this site among its allowed sites
             foreach ($chats as $c) {
                 if ((int) ($c['id'] ?? 0) !== aiworker_chat_linked_id()) continue;
+                // the account's data: a missing consultant overrides the key check; the allowed sites settle step 3
+                // unless the key check already passed (www and *.domain entries match there, not here)
                 if (empty($c['persona']['name'])) $steps[2] = false;
-                if ($steps[3] === null && isset($c['site_domains'])) $steps[3] = in_array(aiworker_chat_site_host(), (array) $c['site_domains'], true);
+                elseif ($steps[2] === null) $steps[2] = true;
+                if (isset($c['site_domains']) && $steps[3] !== true) $steps[3] = in_array(aiworker_chat_site_host(), (array) $c['site_domains'], true);
             }
         }
     }

@@ -38,7 +38,7 @@ function aiworker_chat_remote_chat_save(): void {
         if ($lang === '' || ! is_array($texts)) continue;
         foreach (['title', 'name', 'tab_label'] as $k) if (isset($texts[$k])) $out['texts'][$lang][$k] = sanitize_text_field((string) $texts[$k]);
         if (isset($texts['greeting'])) $out['texts'][$lang]['greeting'] = sanitize_textarea_field((string) $texts['greeting']);
-        if (isset($texts['suggestions'])) $out['texts'][$lang]['suggestions'] = array_values(array_filter(array_map('sanitize_text_field', array_map('strval', (array) $texts['suggestions'])), 'strlen'));
+        if (isset($texts['suggestions'])) $out['texts'][$lang]['suggestions'] = array_slice(array_values(array_filter(array_map('sanitize_text_field', array_map('strval', (array) $texts['suggestions'])), 'strlen')), 0, 10);
     }
     // lead delivery: the channels chosen and their fields; an empty secret keeps the saved one at kra.name
     if (isset($raw['leads_delivery']) && is_array($raw['leads_delivery'])) {
@@ -103,9 +103,12 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
     if (! $data) return '';
     $chat = $data['chat'];
     $limits = (array) ($data['limits'] ?? []);
-    $langs = array_values(array_filter(array_map('strval', (array) ($chat['languages'] ?? [])), 'strlen'));
+    $langs = array_slice(array_values(array_filter(array_map('strval', (array) ($chat['languages'] ?? [])), 'strlen')), 0, 20);
     $names = ['ru' => 'Русский', 'en' => 'English', 'uk' => 'Українська'];
-    $max = static function (string $k, int $d) use ($limits): int { return (int) ($limits[$k] ?? $d); };
+    // Limits come from the kra.name API; each is clamped to 1..$cap so a bad response cannot inflate the form.
+    $max = static function (string $k, int $d, int $cap = 5000) use ($limits): int {
+        return max(1, min($cap, (int) ($limits[$k] ?? $d)));
+    };
     $panel = (string) ($data['panel_url'] ?? '');
     $html .= '
     <section class="aiworker-chat-card aiworker-chat-chatset';
@@ -195,7 +198,7 @@ function aiworker_chat_chat_step(int $number, array $parts = ['persona', 'texts'
           <p class="description">';
  $html .= esc_html__('Buttons under the greeting; a visitor asks with one click. Empty lines are not shown.', 'needtome-ai-chat'); $html .= '</p>
           ';
- for ($k = 0; $k < $max('suggestions_max', 4); $k++) : $html .= '
+ $suggMax = $max('suggestions_max', 4, 10); for ($k = 0; $k < $suggMax; $k++) : $html .= '
             <input type="text" class="regular-text aiworker-chat-chatset__sugg" value="';
  $html .= esc_attr((string) ($sugg[$k] ?? '')); $html .= '" data-cs-sugg="';
  $html .= esc_attr($l); $html .= '" aria-label="';

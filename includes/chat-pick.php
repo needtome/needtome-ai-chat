@@ -84,12 +84,22 @@ function aiworker_chat_signin_status(): void {
 add_action('wp_ajax_aiworker_chat_signin_status', 'aiworker_chat_signin_status');
 
 /** Links the chat to this site and saves its key; returns the notice to show. */
-function aiworker_chat_link_chat(int $chat): string {
+function aiworker_chat_link_chat(int $chat, string $replace = ''): string {
     $result = $chat > 0 ? aiworker_chat_api('POST', '/plugin/link', ['chat_id' => $chat, 'site' => aiworker_chat_site_host()]) : ['code' => 422, 'body' => [], 'error' => ''];
     $key = (string) ($result['body']['key'] ?? '');
     if ($result['code'] === 200 && aiworker_chat_valid_key($key)) {
-        $id = aiworker_chat_add($key, $chat, sanitize_text_field((string) ($result['body']['chat']['name'] ?? '')));
+        $name = sanitize_text_field((string) ($result['body']['chat']['name'] ?? ''));
+        // «Change chat» on a chat that has a key: that chat takes the new one; otherwise the chat is added
+        if ($replace !== '') {
+            if (! aiworker_chat_rebind($replace, $key, $chat, $name)) return 'link_busy';
+            $id = $replace;
+        } else {
+            $id = aiworker_chat_add($key, $chat, $name);
+        }
         if ($id === '') return 'link_failed';
+        // the key check and the account's chats were read before this link: read them again
+        aiworker_chat_with($id, static function (): void { delete_transient(aiworker_chat_option_name('aiworker_chat_check')); });
+        aiworker_chat_forget_me();
         // Learn this chat's greeting choice before its first public page; public requests never fetch it.
         $settings = aiworker_chat_api('GET', '/plugin/chat', ['chat_id' => $chat, 'lang' => aiworker_chat_wizard_lang()]);
         if ($settings['code'] === 200 && is_array($settings['body']['chat'] ?? null)) {
@@ -115,7 +125,17 @@ function aiworker_chat_pick_link(): void {
     // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- IDs are individually converted to positive integers.
     $chosen = (array) wp_unslash($_POST['chat_ids'] ?? $_POST['chat_id'] ?? []);
     $notices = [];
-    foreach (array_unique(array_map('absint', array_filter($chosen, 'is_scalar'))) as $chat) if ($chat > 0) $notices[$chat] = aiworker_chat_link_chat($chat);
+    $current = aiworker_chat_current_id();
+    $currentKey = (string) (aiworker_chat_options()['key'] ?? '');
+    $onSite = [];
+    foreach (aiworker_chat_chats() as $saved) if ($saved['id'] !== $current && (int) $saved['chat_id'] > 0) $onSite[(int) $saved['chat_id']] = true;
+    $replace = empty($_POST['adding']) && $currentKey !== '' ? $current : '';
+    foreach (array_unique(array_map('absint', array_filter($chosen, 'is_scalar'))) as $chat) {
+        if ($chat <= 0) continue;
+        // a chat already on another of this site's chats is opened from its tab, never linked twice
+        $notices[$chat] = isset($onSite[$chat]) ? 'link_other_tab' : aiworker_chat_link_chat($chat, $replace);
+        if ($replace !== '') break;   // a chat holds one remote chat
+    }
     // results of an earlier attempt must not outlive this one
     delete_transient('aiworker_chat_link_results_'.get_current_user_id());
     // a chat added from the list opens at once; a failure comes back to the choice, which says why
@@ -216,31 +236,28 @@ function aiworker_chat_pick_html(bool $adding = false): string {
             $html .= '<p>'.aiworker_chat_signin_link($then, $key === '' ? __('Choose the chat automatically', 'needtome-ai-chat') : __('Sign in to AI Worker', 'needtome-ai-chat')).'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from escaped parts.
             if ($key === '') $html .= '<p class="description">'.esc_html__('Click the link and choose the chat you need from your kra.name chats (if you are not signed in, you will be asked to sign in).', 'needtome-ai-chat').'</p>';
         } else {
-            // the linked chat by name
-            $chats = aiworker_chat_account_chats();
-            $linked = aiworker_chat_linked_id();
-            foreach ((array) $chats as $c) {
-                if ($key === '' || (int) ($c['id'] ?? 0) !== $linked) continue;
-                $persona = (string) ($c['persona']['name'] ?? '');
-                // with one chat its name says nothing: the consultant does
-                if (count($chats) === 1 && $persona !== '') {
-                    /* translators: %s: consultant name */
-                    $html .= '<h3>'.esc_html(sprintf(__('This site\'s chat: consultant %s', 'needtome-ai-chat'), $persona)).'</h3>';
-                } else {
-                    /* translators: %s: chat name with its consultant */
-                    $html .= '<h3>'.esc_html(sprintf(__('This site\'s chat: %s', 'needtome-ai-chat'), $label($c))).'</h3>';
-                }
-                $html .= '<p class="description">'.esc_html__('Connected through AI Worker. To enter a chat key by hand, disconnect AI Worker.', 'needtome-ai-chat').'</p>';
-            }
-            // another of the account's chats, or a new one (a key entered by hand that is not the account's: the chat to set up)
-            $html .= '<p><a href="'.esc_url(aiworker_chat_pick_url()).'">'.esc_html($key === '' || $linked === 0 ? __('Choose the chat', 'needtome-ai-chat') : __('Choose another chat or create a new one', 'needtome-ai-chat')).'</a></p>';
-            // the account it is (its email with the middle hidden, by kra.name), next to the way out of it
+            // one row: the account and the way out of it, then this site's chat and the way to change it (no second block)
             $account = (array) (aiworker_chat_account_me()['account'] ?? []);
             $who = (string) ($account['email_masked'] ?? $account['name'] ?? '');
             $plan = (string) ($account['plan_name'] ?? '');
             $html .= '<p class="aiworker-chat-pick__account"><span class="aiworker-chat-pill aiworker-chat-pill--ok">'.esc_html__('AI Worker connected', 'needtome-ai-chat').'</span>'
                 .($who !== '' ? ' <span class="aiworker-chat-aw__account">'.esc_html($who.($plan !== '' ? ' · '.$plan : '')).'</span>' : '')
                 .' <button type="submit" form="aiworker-chat-disconnect-form" class="button">'.esc_html__('Disconnect AI Worker', 'needtome-ai-chat').'</button></p>';
+            $chats = aiworker_chat_account_chats();
+            $linked = aiworker_chat_linked_id();
+            $current = '';
+            foreach ((array) $chats as $c) {
+                if ($key === '' || (int) ($c['id'] ?? 0) !== $linked) continue;
+                $persona = (string) ($c['persona']['name'] ?? '');
+                // with one chat its name says nothing: the consultant does
+                /* translators: %s: consultant name */
+                $current = count($chats) === 1 && $persona !== '' ? sprintf(__('This site\'s chat: consultant %s', 'needtome-ai-chat'), $persona)
+                    /* translators: %s: chat name with its consultant */
+                    : sprintf(__('This site\'s chat: %s', 'needtome-ai-chat'), $label($c));
+            }
+            // another of the account's chats, or a new one (a key entered by hand that is not the account's: the chat to set up)
+            $html .= '<p class="aiworker-chat-pick__current">'.($current !== '' ? '<strong>'.esc_html($current).'</strong> ' : '')
+                .'<a class="button" href="'.esc_url(aiworker_chat_pick_url()).'">'.esc_html($current !== '' ? __('Change chat', 'needtome-ai-chat') : __('Choose the chat', 'needtome-ai-chat')).'</a></p>';
             $html .= '<p class="description">'.esc_html__('The chat on the site keeps working after disconnecting. The setup wizard, statistics, chat settings blocks, knowledge sync and catalog sync need the AI Worker connection.', 'needtome-ai-chat').'</p>';
         }
         $html .= '</div>';
@@ -255,10 +272,11 @@ function aiworker_chat_pick_html(bool $adding = false): string {
         $cancel = '<button type="button" class="button-link" data-aiworker-chat-add-cancel>'.esc_html__('Cancel', 'needtome-ai-chat').'</button>';
         $html .= '<input type="hidden" form="aiworker-chat-link-form" name="adding" value="1">';
     }
-    // an empty chat can only take a chat that is not on this site yet
+    // a chat can only take a chat that is not on another of this site's chats yet
     $free = $chats;
-    if ($key === '' && $chats) {
-        $taken = array_column(aiworker_chat_chats(), 'chat_id');
+    if ($chats) {
+        $here = aiworker_chat_current_id();
+        $taken = array_map('intval', array_column(array_filter(aiworker_chat_chats(), static function (array $c) use ($here): bool { return $c['id'] !== $here; }), 'chat_id'));
         $free = array_values(array_filter($chats, static function (array $c) use ($taken): bool { return ! in_array((int) ($c['id'] ?? 0), $taken, true); }));
     }
     if ($chats === null) {
@@ -269,73 +287,82 @@ function aiworker_chat_pick_html(bool $adding = false): string {
         $html .= '<p>'.esc_html__('All chats of your AI Worker account are already on this site.', 'needtome-ai-chat').'</p>';
     } elseif (! $free) {
         $html .= '<p>'.esc_html__('Your AI Worker account has no online chat yet.', 'needtome-ai-chat').'</p>';
-    } else {
-        $html .= aiworker_chat_pick_list($free, $key);
     }
-    $html .= aiworker_chat_create_box();
-    $html .= '<p>'.$cancel.'</p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped above.
+    $html .= aiworker_chat_pick_list($free, $key, $cancel);
     return $html.'</div>';
 }
 
 /**
- * The account's chats to choose from, each with its own «Connect this chat» button («Reconnect» for the current one).
- * Nothing is linked without that click: a single chat is only marked as the obvious choice.
+ * The choice as one radio group: each of the account's chats, then «Create a new chat», with one action under it
+ * («Connect this chat», «Reconnect» for the chat already here, or the kra.name link for a new chat). Nothing is linked
+ * without that click: the chat already here, or a single chat, is only checked as the obvious choice.
  */
-function aiworker_chat_pick_list(array $chats, string $key): string {
+function aiworker_chat_pick_list(array $chats, string $key, string $cancel = ''): string {
     $results = (array) get_transient('aiworker_chat_link_results_'.get_current_user_id());
     $notices = aiworker_chat_assistant_notices();
     $current = $key !== '' ? aiworker_chat_linked_id() : 0;
-    $html = '<p><strong>'.esc_html__('Choose a chat for this site', 'needtome-ai-chat').'</strong></p><div class="aiworker-chat-pick__list">';
+    $ids = array_values(array_filter(array_map(static function ($c): int { return (int) ($c['id'] ?? 0); }, $chats)));
+    $checked = in_array($current, $ids, true) ? $current : (count($ids) === 1 ? $ids[0] : ($ids ? 0 : -1)); // -1: «Create a new chat»
+    $html = $ids ? '<p><strong>'.esc_html__('Choose a chat for this site', 'needtome-ai-chat').'</strong></p>' : '';
+    $html .= '<div class="aiworker-chat-pick__list" data-aiworker-chat-pick>';
     foreach ($chats as $c) {
         $id = (int) ($c['id'] ?? 0);
         if ($id <= 0) continue;
         $name = (string) ($c['chat_name'] ?? $c['name'] ?? '') ?: '#'.$id;
-        $preselected = $id === $current || ($current === 0 && count($chats) === 1);
         $domains = array_values(array_filter((array) ($c['site_domains'] ?? []), static function ($d): bool { return is_string($d) && $d !== ''; }));
         $persona = (string) ($c['persona']['name'] ?? '');
-        $html .= '<div class="aiworker-chat-pick__chat'.($preselected ? ' is-selected' : '').'"><div class="aiworker-chat-pick__info"><p class="aiworker-chat-pick__title"><strong>'.esc_html($name).'</strong>';
+        $html .= '<label class="aiworker-chat-pick__chat'.($id === $checked ? ' is-selected' : '').'"><input type="radio" form="aiworker-chat-link-form" name="chat_id" value="'.esc_attr((string) $id).'" data-action="'.($id === $current ? 'reconnect' : 'connect').'"'.($id === $checked ? ' checked' : '').'>';
+        $html .= '<span class="aiworker-chat-pick__info"><span class="aiworker-chat-pick__title"><strong>'.esc_html($name).'</strong>';
         if ($id === $current) $html .= ' <span class="aiworker-chat-pill aiworker-chat-pill--ok">'.esc_html__('Connected to this site', 'needtome-ai-chat').'</span>';
         $html .= ' <span class="aiworker-chat-pill aiworker-chat-pill--'.(! empty($c['enabled']) ? 'ok' : 'off').'">'.esc_html(! empty($c['enabled']) ? __('Enabled', 'needtome-ai-chat') : __('Disabled', 'needtome-ai-chat')).'</span>';
-        $html .= ' <span class="aiworker-chat-pill aiworker-chat-pill--off">'.esc_html(($c['owner'] ?? '') === 'platform' ? __('Platform', 'needtome-ai-chat') : __('Account', 'needtome-ai-chat')).'</span></p>';
+        $html .= ' <span class="aiworker-chat-pill aiworker-chat-pill--off">'.esc_html(($c['owner'] ?? '') === 'platform' ? __('Platform', 'needtome-ai-chat') : __('Account', 'needtome-ai-chat')).'</span></span>';
         /* translators: %s: consultant name */
-        $html .= '<p class="description">'.esc_html(sprintf(__('Consultant: %s', 'needtome-ai-chat'), $persona !== '' ? $persona : '—')).'<br>';
+        $html .= '<span class="description">'.esc_html(sprintf(__('Consultant: %s', 'needtome-ai-chat'), $persona !== '' ? $persona : '—')).'</span>';
         /* translators: %s: comma-separated list of the chat's site domains */
-        $html .= esc_html(sprintf(__('Sites: %s', 'needtome-ai-chat'), $domains ? implode(', ', $domains) : __('not set', 'needtome-ai-chat'))).'</p>';
-        if (isset($results[$id], $notices[$results[$id]])) $html .= '<p class="'.($results[$id] === 'linked' ? 'description' : 'aiworker-chat-pick__error').'">'.esc_html($notices[$results[$id]][1]).'</p>';
-        $html .= '</div>';
-        // the current chat links again too: kra.name re-adds this site to its allowed sites and returns its key
-        $html .= '<button type="submit" form="aiworker-chat-link-form" name="chat_id" value="'.esc_attr((string) $id).'" class="button'.($preselected && $id !== $current ? ' button-primary' : '').'">'.esc_html($id === $current ? __('Reconnect', 'needtome-ai-chat') : __('Connect this chat', 'needtome-ai-chat')).'</button>';
-        $html .= '</div>';
+        $html .= '<span class="description">'.esc_html(sprintf(__('Sites: %s', 'needtome-ai-chat'), $domains ? implode(', ', $domains) : __('not set', 'needtome-ai-chat'))).'</span>';
+        if (isset($results[$id], $notices[$results[$id]])) $html .= '<span class="'.($results[$id] === 'linked' ? 'description' : 'aiworker-chat-pick__error').'">'.esc_html($notices[$results[$id]][1]).'</span>';
+        $html .= '</span></label>';
     }
-    return $html.'</div>';
+    [$option, $link] = aiworker_chat_create_option($checked === -1);
+    $html .= $option.'</div>';
+    // one action for the checked option; the settings script swaps it as the choice changes
+    $chosen = $checked > 0 ? ($checked === $current ? 'reconnect' : 'connect') : ($checked === -1 ? 'new' : '');
+    $html .= '<p class="aiworker-chat-pick__actions">';
+    $html .= '<button type="submit" form="aiworker-chat-link-form" class="button button-primary" data-aiworker-chat-pick-submit data-connect="'.esc_attr__('Connect this chat', 'needtome-ai-chat').'" data-reconnect="'.esc_attr__('Reconnect', 'needtome-ai-chat').'"'.($chosen === 'new' ? ' hidden' : '').($chosen === '' ? ' disabled' : '').'>'.esc_html($chosen === 'reconnect' ? __('Reconnect', 'needtome-ai-chat') : __('Connect this chat', 'needtome-ai-chat')).'</button>';
+    $html .= str_replace('<a ', '<a data-aiworker-chat-pick-new'.($chosen === 'new' ? '' : ' hidden').' ', $link);
+    $html .= ' '.$cancel.'</p>';
+    return $html;
 }
 
 /**
- * «Create a new chat»: the chat is made in the kra.name panel. When the plan has no free chat, the reason from kra.name,
- * the price of an extra chat and the way to buy it come first (/plugin/me chat_slots).
+ * «Create a new chat» as the last option of the choice: the chat is made in the kra.name panel. When the plan has no
+ * free chat, the reason from kra.name and the price of an extra chat come with it; when kra.name does not allow
+ * creating one, its action buys one instead (/plugin/me chat_slots). Returns the option and its action link.
  */
-function aiworker_chat_create_box(): string {
+function aiworker_chat_create_option(bool $checked): array {
     $slots = (array) (aiworker_chat_account_me()['chat_slots'] ?? []);
     $panel = aiworker_chat_base().'/panel';
-    $html = '<div class="aiworker-chat-pick__create"><p><strong>'.esc_html__('Create a new chat', 'needtome-ai-chat').'</strong></p>';
     $unavailable = ($slots['can_create'] ?? true) === false;
     // no free place in the plan, but a new chat can still be made and is billed on top of it
     $extra = ! $unavailable && (! empty($slots['needs_extra_chat']) || (array_key_exists('available', $slots) && $slots['available'] === 0));
+    $html = '<label class="aiworker-chat-pick__chat aiworker-chat-pick__create'.($checked ? ' is-selected' : '').'"><input type="radio" form="aiworker-chat-link-form" name="chat_id" value="new" data-action="new"'.($checked ? ' checked' : '').'>';
+    $html .= '<span class="aiworker-chat-pick__info"><span class="aiworker-chat-pick__title"><strong>'.esc_html__('Create a new chat', 'needtome-ai-chat').'</strong></span>';
     if ($unavailable || $extra) {
         $reason = is_string($slots['reason'] ?? null) && $slots['reason'] !== '' ? $slots['reason']
             : ($extra ? __('Your plan has no free website chat slot: a new chat is billed separately.', 'needtome-ai-chat') : '');
-        if ($reason !== '') $html .= '<p class="'.($unavailable ? 'aiworker-chat-pick__error' : 'aiworker-chat-pick__note').'">'.esc_html($reason).'</p>';
+        if ($reason !== '') $html .= '<span class="'.($unavailable ? 'aiworker-chat-pick__error' : 'aiworker-chat-pick__note').'">'.esc_html($reason).'</span>';
         $price = $slots['extra_chat_price_usd'] ?? null;
         /* translators: %s: price in US dollars */
-        $html .= '<p class="description">'.esc_html(is_int($price) || is_float($price) ? sprintf(__('An extra website chat costs +$%s per month.', 'needtome-ai-chat'), number_format_i18n((float) $price, floor((float) $price) == (float) $price ? 0 : 2)) : __('See the billing page for the current price of an extra website chat.', 'needtome-ai-chat')).'</p>';
-        if ($unavailable) {
-            $buy = is_string($slots['buy_url'] ?? null) && strpos($slots['buy_url'], $panel.'/') === 0 ? $slots['buy_url'] : $panel.'/billing?add_chat=1';
-            $html .= '<p><a class="button button-primary" href="'.esc_url($buy).'" target="_blank" rel="noopener">'.esc_html__('Buy an extra chat or choose a higher plan', 'needtome-ai-chat').'</a></p>';
-            return $html.'</div>';
-        }
+        $html .= '<span class="description">'.esc_html(is_int($price) || is_float($price) ? sprintf(__('An extra website chat costs +$%s per month.', 'needtome-ai-chat'), number_format_i18n((float) $price, floor((float) $price) == (float) $price ? 0 : 2)) : __('See the billing page for the current price of an extra website chat.', 'needtome-ai-chat')).'</span>';
     }
-    $html .= '<p><a class="button" href="'.esc_url($panel.'/chat?new=1').'" target="_blank" rel="noopener">'.esc_html__('Create a new chat', 'needtome-ai-chat').'</a> <span class="description">'.esc_html__('The chat is created in the kra.name panel; then come back and connect it here.', 'needtome-ai-chat').'</span></p>';
-    return $html.'</div>';
+    if ($unavailable) {
+        $buy = is_string($slots['buy_url'] ?? null) && strpos($slots['buy_url'], $panel.'/') === 0 ? $slots['buy_url'] : $panel.'/billing?add_chat=1';
+        $link = '<a class="button button-primary" href="'.esc_url($buy).'" target="_blank" rel="noopener">'.esc_html__('Buy an extra chat or choose a higher plan', 'needtome-ai-chat').'</a>';
+    } else {
+        $html .= '<span class="description">'.esc_html__('The chat is created in the kra.name panel; then come back and connect it here.', 'needtome-ai-chat').'</span>';
+        $link = '<a class="button button-primary" href="'.esc_url($panel.'/chat?new=1').'" target="_blank" rel="noopener">'.esc_html__('Create a new chat', 'needtome-ai-chat').'</a>';
+    }
+    return [$html.'</span></label>', $link];
 }
 
 function aiworker_chat_pick_panel(): void {

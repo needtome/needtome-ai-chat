@@ -167,6 +167,8 @@ function aiworker_chat_assistant_notices(): array {
         'link_domains' => ['error', __('This chat already has the maximum of 20 allowed sites. Remove one in the chat\'s settings at kra.name, then connect again.', 'needtome-ai-chat')],
         'link_expired' => ['error', __('This sign-in link is outdated or was already used. Open the NeedToMe AI Chat settings and copy the link again.', 'needtome-ai-chat')],
         'tg_failed' => ['error', __('kra.name did not give a Telegram link. Try again, or connect the bot in the kra.name panel.', 'needtome-ai-chat')],
+        'link_busy' => ['warning', __('This chat is syncing its knowledge. Try changing the chat again in a minute.', 'needtome-ai-chat')],
+        'link_other_tab' => ['warning', __('This chat is already connected to another chat tab of this site. Open that tab instead.', 'needtome-ai-chat')],
         'link_failed' => ['error', __('kra.name did not connect this chat. Try again, or copy the public key wk_… from the chat\'s card.', 'needtome-ai-chat')],
     ];
 }

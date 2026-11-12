@@ -376,6 +376,24 @@ function aiworker_chat_sanitize_saved($input): array {
     return $out;
 }
 
+/**
+ * «Change chat»: this chat takes another remote chat. Its widget and sync settings stay; the old chat's knowledge
+ * state does not carry over. False when its sync is running (try again shortly).
+ */
+function aiworker_chat_rebind(string $id, string $key, int $chatId, string $name): bool {
+    return (bool) aiworker_chat_with($id, static function () use ($id, $key, $chatId, $name): bool {
+        $saved = aiworker_chat_read_options(AIWORKER_CHAT_OPTION, $id);
+        if ((int) ($saved['chat_id'] ?? 0) === $chatId && (string) ($saved['key'] ?? '') === $key) return true;
+        $token = aiworker_chat_kb_lock_take();
+        if ($token === '') return false;
+        try {
+            aiworker_chat_reset_destination($id);
+            aiworker_chat_store(AIWORKER_CHAT_OPTION, array_merge($saved, ['key' => $key, 'chat_id' => $chatId, 'name' => $name, 'remote_greet_popup' => null]), $id);
+        } finally { aiworker_chat_kb_lock_release($token); }
+        return true;
+    });
+}
+
 /** Remember the server's greeting flag without fetching configuration on public page requests. */
 function aiworker_chat_remember_remote(array $chat): void {
     $saved = aiworker_chat_read_options(AIWORKER_CHAT_OPTION);

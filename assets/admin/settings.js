@@ -84,7 +84,12 @@ if (window.jQuery && window.jQuery.fn && window.jQuery.fn.wpColorPicker) {
           if (g && g.value.trim()) extra.greeting = g.value.trim(); // empty: the chat's own greeting stays
           var an = document.querySelector('[data-cs-field="ai_notice"]'), gp = document.querySelector('[data-cs-field="greet_popup"]');
           if (an) extra.aiNotice = an.checked; if (gp) extra.greet = gp.checked;
-          document.documentElement.style.setProperty('--aiworker-chat-accent', hex(field('color').value) || '#4f46e5'); // the icon picker shows the chat's colour
+          var accent = hex(field('color').value) || '#4f46e5';
+          document.documentElement.style.setProperty('--aiworker-chat-accent', accent); // the icon picker shows the chat's colour
+          // and its icons in the chat button's own icon colour: white, black, or «auto» by the main colour's brightness (as the widget does)
+          var lum = function (h) { return [1, 3, 5].reduce(function (sum, i, n) { var v = parseInt(h.substr(i, 2), 16) / 255; v = v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); return sum + [0.2126, 0.7152, 0.0722][n] * v; }, 0); };
+          var mode = colors.accent_text, L = /^#[0-9a-f]{6}$/i.test(accent) ? lum(accent) : 0;
+          document.documentElement.style.setProperty('--aiworker-chat-accent-fg', mode === 'dark' || (mode !== 'light' && (L + 0.05) / 0.05 >= 1.05 / (L + 0.05)) ? '#000' : '#fff');
           var ic = document.querySelector('[data-cs-field="launcher_icon"]:checked');
           if (ic) { extra.launcherIcon = ic.value; extra.launcherIconUrl = ic.value === 'custom' ? ic.getAttribute('data-url') || '' : ''; }
           if (q.length) extra.suggestions = Array.prototype.map.call(q, function (f) { return f.value.trim(); }).filter(Boolean);
@@ -128,7 +133,8 @@ if (window.jQuery && window.jQuery.fn && window.jQuery.fn.wpColorPicker) {
       // «Reset preview»: unsaved edits in the form and the preview go back to the saved settings; nothing is saved.
       // The button shows only while the form differs from what was loaded.
       var reset = form.querySelector('.aiworker-chat-reset'), resetDone = form.querySelector('.aiworker-chat-reset-done');
-      var saved = Array.prototype.map.call(form.querySelectorAll('input[name], select[name], textarea[name]'), function (f) {
+      // only this form's own fields: the chat choice inside it belongs to the link form (form="…")
+      var saved = Array.prototype.filter.call(form.querySelectorAll('input[name], select[name], textarea[name]'), function (f) { return f.form === form; }).map(function (f) {
         return { f: f, v: f.value, on: f.checked };
       });
       var differs = function () { return saved.some(function (s) { return (s.f.type === 'checkbox' || s.f.type === 'radio') ? s.f.checked !== s.on : s.f.value !== s.v; }); };
@@ -154,3 +160,18 @@ if (window.jQuery && window.jQuery.fn && window.jQuery.fn.wpColorPicker) {
       }
       if (c.autoLoad) loadPreview();
     })();
+// The chat choice is one radio group: the action under it follows the checked option (the list can be replaced in place)
+document.addEventListener('change', function (e) {
+  var radio = e.target;
+  if (!radio.matches || !radio.matches('[data-aiworker-chat-pick] input[type="radio"][name="chat_id"]')) return;
+  var list = radio.closest('[data-aiworker-chat-pick]'), actions = list.nextElementSibling;
+  list.querySelectorAll('.aiworker-chat-pick__chat').forEach(function (row) { row.classList.toggle('is-selected', row.contains(radio)); });
+  if (!actions) return;
+  var submit = actions.querySelector('[data-aiworker-chat-pick-submit]'), create = actions.querySelector('[data-aiworker-chat-pick-new]'), mode = radio.getAttribute('data-action');
+  if (submit) {
+    submit.hidden = mode === 'new';
+    submit.disabled = false;
+    submit.textContent = submit.getAttribute(mode === 'reconnect' ? 'data-reconnect' : 'data-connect');
+  }
+  if (create) create.hidden = mode !== 'new';
+});
